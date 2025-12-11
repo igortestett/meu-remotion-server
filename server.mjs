@@ -46,6 +46,7 @@ app.post("/render", async (req, res) => {
       codec: "h264",
       outputLocation,
       inputProps,
+      concurrency: 16,
       pixelFormat: "yuv420p",
       // concurrency: 1, // Descomente se travar por memória!
       
