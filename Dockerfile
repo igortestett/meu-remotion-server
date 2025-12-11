@@ -9,9 +9,15 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
-# Instala o express e o bundler que não vêm no template padrão
-RUN npm install express @remotion/bundler @remotion/renderer
+RUN npm install \
+    express \
+    react \
+    react-dom \
+    remotion \
+    @remotion/bundler \
+    @remotion/renderer \
+    @remotion/transitions \
+    zod
 
 COPY . .
 
