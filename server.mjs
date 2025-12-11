@@ -28,14 +28,12 @@ app.post("/render", async (req, res) => {
 
     console.log("Selecionando composição...");
     
-    // O selectComposition vai chamar o calculateMetadata automaticamente!
     const composition = await selectComposition({
       serveUrl: bundled,
       id: inputProps.modeloId || "VideoLongo", 
       inputProps,
     });
 
-    // Se o calculateMetadata funcionou, isso mostrará o valor correto (ex: 18300)
     console.log(`Duração calculada pelo Metadata: ${composition.durationInFrames} frames`);
 
     const outputLocation = `/tmp/video-${Date.now()}.mp4`;
@@ -49,8 +47,16 @@ app.post("/render", async (req, res) => {
       outputLocation,
       inputProps,
       pixelFormat: "yuv420p",
-      // Como o metadata já calculou a duração, não precisamos forçar frameRange
-    });
+      // concurrency: 1, // Descomente se travar por memória!
+      
+      // --- LOG DE PROGRESSO (DENTRO do objeto) ---
+      onProgress: ({ renderedFrames }) => {
+        if (renderedFrames % 100 === 0) {
+          const progresso = Math.round((renderedFrames / composition.durationInFrames) * 100);
+          console.log(`Progresso: ${progresso}% (${renderedFrames}/${composition.durationInFrames})`);
+        }
+      },
+    }); // <--- O fechamento correto é AQUI, depois do onProgress
 
     console.log("Renderização concluída:", outputLocation);
     res.download(outputLocation);
@@ -65,4 +71,4 @@ app.post("/render", async (req, res) => {
 
 // 2. Inicia o servidor
 const server = app.listen(3000, () => console.log("Servidor rodando na porta 3000 com Timeout de 30min"));
-server.setTimeout(1800000); // 30 minutos
+server.setTimeout(1800000);
