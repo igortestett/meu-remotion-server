@@ -23,7 +23,7 @@ app.post("/render", async (req, res) => {
     console.log("Selecionando composição...");
     const composition = await selectComposition({
       serveUrl: bundled,
-      id: "HelloWorld", // ID padrão do template
+      id: "inputProps.modeloId || "HelloWorld", // ID padrão do template
       inputProps,
     });
 
