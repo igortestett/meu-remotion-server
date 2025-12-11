@@ -38,6 +38,26 @@ app.post("/render", async (req, res) => {
       inputProps,
     });
 
+    const inputProps = req.body;
+
+// CÁLCULO MÁGICO DE DURAÇÃO
+// Se for o template VideoLongo, calcula frames totais baseados nas imagens
+let duracaoTotal = 150; // default
+if (inputProps.imagens) {
+  const segundos = inputProps.imagens.reduce((total, img) => total + img.duracaoEmSegundos, 0);
+  duracaoTotal = Math.ceil(segundos * 30); // 30 fps
+}
+
+// Agora passamos a durationInFrames forçada para o selectComposition
+const composition = await selectComposition({
+  serveUrl: bundled,
+  id: inputProps.modeloId || "VideoLongo",
+  inputProps,
+  defaultProps: {
+    durationInFrames: duracaoTotal // <--- O servidor força a duração correta aqui!
+  }
+});
+
     res.download(outputLocation);
     
   } catch (err) {
