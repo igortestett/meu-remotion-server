@@ -3,10 +3,7 @@ import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import path from "path";
 
-// Aumenta o timeout para 30 minutos (em milissegundos)
-const server = app.listen(3000, () => console.log("Servidor rodando..."));
-server.setTimeout(1800000); 
-
+// 1. PRIMEIRO cria o app
 const app = express();
 app.use(express.json());
 
@@ -15,6 +12,10 @@ app.get("/", (req, res) => res.send("Gerador de Vídeo Pronto!"));
 
 // Rota que o n8n vai chamar
 app.post("/render", async (req, res) => {
+  // Aumenta o timeout DESTA requisição específica para 30 minutos
+  req.setTimeout(1800000); 
+  res.setTimeout(1800000);
+
   try {
     const inputProps = req.body;
     console.log("Recebendo pedido:", inputProps.modeloId || "Padrão");
@@ -28,20 +29,18 @@ app.post("/render", async (req, res) => {
     // --- CÁLCULO DE DURAÇÃO DINÂMICA ---
     let duracaoFrameOverride = undefined;
 
-    // Se tiver lista de imagens com duração, soma tudo
     if (inputProps.imagens && Array.isArray(inputProps.imagens)) {
       const segundosTotais = inputProps.imagens.reduce((total, img) => {
-        return total + (img.duracaoEmSegundos || 5); // Default 5s se vier sem
+        return total + (img.duracaoEmSegundos || 5);
       }, 0);
       
-      duracaoFrameOverride = Math.ceil(segundosTotais * 30); // 30 FPS
-      console.log(`Duração calculada dinamicamente: ${segundosTotais}s (${duracaoFrameOverride} frames)`);
+      duracaoFrameOverride = Math.ceil(segundosTotais * 30);
+      console.log(`Duração calculada: ${segundosTotais}s`);
     }
 
     console.log("Selecionando composição...");
     const composition = await selectComposition({
       serveUrl: bundled,
-      // Se o n8n não mandar ID, usa VideoLongo (ou HelloWorld se preferir)
       id: inputProps.modeloId || "VideoLongo", 
       inputProps,
       defaultProps: duracaoFrameOverride ? {
@@ -58,8 +57,10 @@ app.post("/render", async (req, res) => {
       codec: "h264",
       outputLocation,
       inputProps,
-      // Garante que a duração calculada seja respeitada na renderização
       frameRange: [0, composition.durationInFrames - 1], 
+      // Otimização para vídeos longos (menos memória)
+      concurrency: 1, 
+      pixelFormat: "yuv420p",
     });
 
     console.log("Renderização concluída:", outputLocation);
@@ -67,8 +68,13 @@ app.post("/render", async (req, res) => {
     
   } catch (err) {
     console.error("ERRO CRÍTICO:", err);
-    res.status(500).send("Erro na renderização: " + err.message);
+    // Se já enviou cabeçalho, não tenta enviar erro de novo
+    if (!res.headersSent) {
+        res.status(500).send("Erro na renderização: " + err.message);
+    }
   }
 });
 
-app.listen(3000, () => console.log("Servidor rodando na porta 3000"));
+// 2. POR ÚLTIMO inicia o servidor e define o timeout global
+const server = app.listen(3000, () => console.log("Servidor rodando na porta 3000 com Timeout de 30min"));
+server.setTimeout(1800000); // 30 minutos
