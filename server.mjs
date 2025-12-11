@@ -3,6 +3,10 @@ import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import path from "path";
 
+// Aumenta o timeout para 30 minutos (em milissegundos)
+const server = app.listen(3000, () => console.log("Servidor rodando..."));
+server.setTimeout(1800000); 
+
 const app = express();
 app.use(express.json());
 
