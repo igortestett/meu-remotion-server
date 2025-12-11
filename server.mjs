@@ -12,13 +12,17 @@ const app = express();
 app.use(express.json());
 
 // Rota de teste
-app.get("/", (req, res) => res.send("Controlador Lambda OK!"));
+app.get("/", (req, res) => res.send("Controlador Lambda OTIMIZADO (15min timeout) OK!"));
 
 // Rota de Renderização (Assíncrona)
 app.post("/render", async (req, res) => {
   try {
     const inputProps = req.body;
     const region = process.env.REMOTION_AWS_REGION || "us-east-1";
+    
+    // IMPORTANTE: Certifique-se de que esta variável no seu .env ou Easypanel
+    // está apontando para a NOVA função que você criou (a que tem 900sec no nome/config)
+    // Se deixar a antiga, pode dar erro de mismatch.
     const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME;
 
     if (!functionName) {
@@ -27,6 +31,7 @@ app.post("/render", async (req, res) => {
 
     console.log("1. Empacotando código...");
     const entry = "./src/index.ts";
+    // Nota: O bundle pode demorar um pouco, mas é local no servidor
     const bundled = await bundle(path.join(process.cwd(), entry));
 
     console.log("2. Subindo para AWS S3...");
@@ -39,14 +44,16 @@ app.post("/render", async (req, res) => {
       siteName: "meu-gerador-video", 
     });
 
-    console.log("3. Disparando Lambda...");
+    console.log("3. Disparando Lambda (Modo Otimizado para Contas Novas)...");
     
-    // Cálculo de Duração (igual fazíamos antes)
+    // Cálculo de Duração
     let duracao = 300; // default 10s
     if (inputProps.imagens && Array.isArray(inputProps.imagens)) {
         const seg = inputProps.imagens.reduce((acc, img) => acc + (img.duracaoEmSegundos||5), 0);
         duracao = Math.ceil(seg * 30);
     }
+
+    console.log(`Duração estimada: ${duracao} frames. Usando função: ${functionName}`);
 
     const { renderId, bucketName: outputBucket } = await renderMediaOnLambda({
       region,
@@ -55,7 +62,23 @@ app.post("/render", async (req, res) => {
       composition: inputProps.modeloId || "VideoLongo",
       inputProps,
       codec: "h264",
-      framesPerLambda: 200, // Cada robô faz 6 segundos de vídeo
+      
+      // --- CONFIGURAÇÕES CRITICAS PARA EVITAR ERROS ---
+      
+      // 1. Aumentamos MUITO os frames por lambda. 
+      // 2400 frames = ~80 segundos de vídeo por robô.
+      // Para 13 min (23400 frames) -> ~10 robôs simultâneos (Seguro para o limite da conta).
+      framesPerLambda: 2400, 
+
+      // 2. Definimos o timeout explicitamente para 15 minutos (900s)
+      // Isso evita que o robô morra no meio do processamento longo.
+      timeoutInSeconds: 900,
+
+      // 3. Segurança contra falhas de rede
+      retries: 2,
+      
+      // ------------------------------------------------
+      
       defaultProps: {
           durationInFrames: duracao
       }
@@ -73,8 +96,8 @@ app.post("/render", async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    console.error("ERRO CRÍTICO NO RENDER:", err);
+    res.status(500).json({ error: err.message, stack: err.stack });
   }
 });
 
@@ -85,7 +108,6 @@ app.get("/status/:renderId", async (req, res) => {
         const region = process.env.REMOTION_AWS_REGION || "us-east-1";
         const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME;
         
-        // Descobre qual bucket o Remotion usou (padrão)
         const { bucketName } = await getOrCreateBucket({ region });
 
         const progress = await getRenderProgress({
@@ -96,6 +118,7 @@ app.get("/status/:renderId", async (req, res) => {
         });
         
         if (progress.done) {
+            console.log(`Render ${renderId} finalizado! URL: ${progress.outputFile}`);
             res.json({ 
                 status: "done", 
                 url: progress.outputFile,
@@ -104,15 +127,18 @@ app.get("/status/:renderId", async (req, res) => {
         } else {
             // Se der erro fatal no Lambda
             if (progress.fatalErrorEncountered) {
+                 console.error(`Erro fatal no render ${renderId}:`, progress.errors);
                  return res.status(500).json({ status: "error", error: progress.errors });
             }
 
             res.json({ 
                 status: "processing", 
-                progress: Math.round(progress.overallProgress * 100) + "%"
+                progress: Math.round(progress.overallProgress * 100) + "%",
+                chunks: progress.chunks // Opcional: para debug
             });
         }
     } catch (err) {
+        console.error("Erro ao checar status:", err);
         res.status(500).json({ error: err.message });
     }
 });
