@@ -5,7 +5,7 @@ import {
   getOrCreateBucket, 
   renderMediaOnLambda,
   getRenderProgress
-} from "@remotion/lambda/client";
+} from "@remotion/lambda";
 import path from "path";
 
 const app = express();
