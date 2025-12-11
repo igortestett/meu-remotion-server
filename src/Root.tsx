@@ -1,7 +1,6 @@
 import { Composition } from "remotion";
 import { HelloWorld, myCompSchema } from "./HelloWorld";
 import { Logo, myCompSchema2 } from "./HelloWorld/Logo";
-import { Composition } from 'remotion';
 import { VideoLongo } from './VideoLongo/Composition';
 
 // Each <Composition> is an entry in the sidebar!
@@ -42,15 +41,18 @@ export const RemotionRoot: React.FC = () => {
           logoColor1: "#91dAE2" as const,
           logoColor2: "#86A8E7" as const,
         }}
-    <Composition
+      /> 
+      {/* ^^^ ADICIONEI ESTE FECHAMENTO QUE FALTAVA */}
+
+      <Composition
         id="VideoLongo"
         component={VideoLongo}
-        durationInFrames={3600} // Valor padrão (será sobrescrito pelo calculateMetadata se quisermos avançado, mas por enquanto ok)
+        durationInFrames={3600} 
         fps={30}
         width={1920}
         height={1080}
         defaultProps={{
-          audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", // Exemplo para teste
+          audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", 
           imagens: [
             { url: "https://picsum.photos/seed/1/1920/1080", duracaoEmSegundos: 5 },
             { url: "https://picsum.photos/seed/2/1920/1080", duracaoEmSegundos: 5 },
