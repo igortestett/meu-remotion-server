@@ -48,7 +48,6 @@ app.post("/render", async (req, res) => {
       codec: "h264",
       outputLocation,
       inputProps,
-      concurrency: 1, // Economiza RAM
       pixelFormat: "yuv420p",
       // Como o metadata já calculou a duração, não precisamos forçar frameRange
     });
