@@ -44,20 +44,8 @@ app.post("/render", async (req, res) => {
       serveUrl: bundled,
       id: inputProps.modeloId || "VideoLongo", 
       inputProps,
-      // Tenta passar o override aqui (mas às vezes falha)
-      defaultProps: duracaoFrameOverride ? {
-        durationInFrames: duracaoFrameOverride
-      } : undefined
-    });
 
-    // --- CORREÇÃO PRINCIPAL ---
-    // Se tivermos um override calculado, usamos ele. Se não, usa o da composição.
-    const durationFinal = duracaoFrameOverride || composition.durationInFrames;
-    console.log(`Duração FINAL que será usada: ${durationFinal} frames`);
-
-    const outputLocation = `/tmp/video-${Date.now()}.mp4`;
-    
-    console.log(`Iniciando renderização de ${durationFinal} frames...`);
+      console.log(`Duration from metadata: ${composition.durationInFrames}`);
     
     await renderMedia({
       composition,
