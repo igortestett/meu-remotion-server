@@ -68,7 +68,7 @@ app.post("/render", async (req, res) => {
       // 1. Aumentamos MUITO os frames por lambda. 
       // 2400 frames = ~80 segundos de vídeo por robô.
       // Para 13 min (23400 frames) -> ~10 robôs simultâneos (Seguro para o limite da conta).
-      framesPerLambda: 2400, 
+      framesPerLambda: 4500, 
 
       // 2. Definimos o timeout explicitamente para 15 minutos (900s)
       // Isso evita que o robô morra no meio do processamento longo.
