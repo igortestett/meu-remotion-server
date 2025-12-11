@@ -26,26 +26,21 @@ app.post("/render", async (req, res) => {
     console.log("Criando bundle...");
     const bundled = await bundle(path.join(process.cwd(), entry));
 
-    // --- CÁLCULO DE DURAÇÃO DINÂMICA ---
-    let duracaoFrameOverride = undefined;
-
-    if (inputProps.imagens && Array.isArray(inputProps.imagens)) {
-      const segundosTotais = inputProps.imagens.reduce((total, img) => {
-        return total + (img.duracaoEmSegundos || 5);
-      }, 0);
-      
-      // Calcula frames (30 fps)
-      duracaoFrameOverride = Math.ceil(segundosTotais * 30);
-      console.log(`Duração calculada: ${segundosTotais}s (${duracaoFrameOverride} frames)`);
-    }
-
     console.log("Selecionando composição...");
+    
+    // O selectComposition vai chamar o calculateMetadata automaticamente!
     const composition = await selectComposition({
       serveUrl: bundled,
       id: inputProps.modeloId || "VideoLongo", 
       inputProps,
+    });
 
-      console.log(`Duration from metadata: ${composition.durationInFrames}`);
+    // Se o calculateMetadata funcionou, isso mostrará o valor correto (ex: 18300)
+    console.log(`Duração calculada pelo Metadata: ${composition.durationInFrames} frames`);
+
+    const outputLocation = `/tmp/video-${Date.now()}.mp4`;
+    
+    console.log(`Iniciando renderização de ${composition.durationInFrames} frames...`);
     
     await renderMedia({
       composition,
@@ -53,10 +48,9 @@ app.post("/render", async (req, res) => {
       codec: "h264",
       outputLocation,
       inputProps,
-      // Aqui forçamos o intervalo exato que queremos
-      frameRange: [0, durationFinal - 1], 
       concurrency: 1, // Economiza RAM
       pixelFormat: "yuv420p",
+      // Como o metadata já calculou a duração, não precisamos forçar frameRange
     });
 
     console.log("Renderização concluída:", outputLocation);
