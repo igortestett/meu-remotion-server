@@ -1,75 +1,120 @@
 import express from "express";
 import { bundle } from "@remotion/bundler";
-import { renderMedia, selectComposition } from "@remotion/renderer";
+import { 
+  deploySite, 
+  getOrCreateBucket, 
+  renderMediaOnLambda,
+  getRenderProgress
+} from "@remotion/lambda/client";
 import path from "path";
 
-// 1. Cria o app
 const app = express();
 app.use(express.json());
 
-// Rota para testar se está vivo
-app.get("/", (req, res) => res.send("Gerador de Vídeo Pronto!"));
+// Rota de teste
+app.get("/", (req, res) => res.send("Controlador Lambda OK!"));
 
-// Rota que o n8n vai chamar
+// Rota de Renderização (Assíncrona)
 app.post("/render", async (req, res) => {
-  // Aumenta o timeout para 30 minutos
-  req.setTimeout(1800000); 
-  res.setTimeout(1800000);
-
   try {
     const inputProps = req.body;
-    console.log("Recebendo pedido:", inputProps.modeloId || "Padrão");
-    
-    // Caminho de entrada do código Remotion
+    const region = process.env.REMOTION_AWS_REGION || "us-east-1";
+    const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME;
+
+    if (!functionName) {
+      throw new Error("Faltou configurar a variável REMOTION_LAMBDA_FUNCTION_NAME");
+    }
+
+    console.log("1. Empacotando código...");
     const entry = "./src/index.ts";
-    
-    console.log("Criando bundle...");
     const bundled = await bundle(path.join(process.cwd(), entry));
 
-    console.log("Selecionando composição...");
+    console.log("2. Subindo para AWS S3...");
+    const { bucketName } = await getOrCreateBucket({ region });
     
-    const composition = await selectComposition({
-      serveUrl: bundled,
-      id: inputProps.modeloId || "VideoLongo", 
-      inputProps,
+    const { serveUrl } = await deploySite({
+      bucketName,
+      entryPoint: path.join(process.cwd(), entry),
+      region,
+      siteName: "meu-gerador-video", 
     });
 
-    console.log(`Duração calculada pelo Metadata: ${composition.durationInFrames} frames`);
-
-    const outputLocation = `/tmp/video-${Date.now()}.mp4`;
+    console.log("3. Disparando Lambda...");
     
-    console.log(`Iniciando renderização de ${composition.durationInFrames} frames...`);
-    
-    await renderMedia({
-      composition,
-      serveUrl: bundled,
-      codec: "h264",
-      outputLocation,
-      inputProps,
-      concurrency: 16,
-      pixelFormat: "yuv420p",
-      // concurrency: 1, // Descomente se travar por memória!
-      
-      // --- LOG DE PROGRESSO (DENTRO do objeto) ---
-      onProgress: ({ renderedFrames }) => {
-        if (renderedFrames % 100 === 0) {
-          const progresso = Math.round((renderedFrames / composition.durationInFrames) * 100);
-          console.log(`Progresso: ${progresso}% (${renderedFrames}/${composition.durationInFrames})`);
-        }
-      },
-    }); // <--- O fechamento correto é AQUI, depois do onProgress
-
-    console.log("Renderização concluída:", outputLocation);
-    res.download(outputLocation);
-    
-  } catch (err) {
-    console.error("ERRO CRÍTICO:", err);
-    if (!res.headersSent) {
-        res.status(500).send("Erro na renderização: " + err.message);
+    // Cálculo de Duração (igual fazíamos antes)
+    let duracao = 300; // default 10s
+    if (inputProps.imagens && Array.isArray(inputProps.imagens)) {
+        const seg = inputProps.imagens.reduce((acc, img) => acc + (img.duracaoEmSegundos||5), 0);
+        duracao = Math.ceil(seg * 30);
     }
+
+    const { renderId, bucketName: outputBucket } = await renderMediaOnLambda({
+      region,
+      functionName,
+      serveUrl,
+      composition: inputProps.modeloId || "VideoLongo",
+      inputProps,
+      codec: "h264",
+      framesPerLambda: 200, // Cada robô faz 6 segundos de vídeo
+      defaultProps: {
+          durationInFrames: duracao
+      }
+    });
+
+    console.log(`Render iniciado! ID: ${renderId}`);
+
+    // Responde RÁPIDO para o n8n não dar timeout
+    res.json({
+      status: "rendering",
+      renderId,
+      region,
+      bucketName: outputBucket,
+      checkUrl: `/status/${renderId}`
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-// 2. Inicia o servidor
-const server = app.listen(3000, () => console.log("Servidor rodando na porta 3000 com Timeout de 30min"));
-server.setTimeout(1800000);
+// Rota de Status (Polling)
+app.get("/status/:renderId", async (req, res) => {
+    try {
+        const { renderId } = req.params;
+        const region = process.env.REMOTION_AWS_REGION || "us-east-1";
+        const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME;
+        
+        // Descobre qual bucket o Remotion usou (padrão)
+        const { bucketName } = await getOrCreateBucket({ region });
+
+        const progress = await getRenderProgress({
+            renderId,
+            bucketName,
+            functionName,
+            region
+        });
+        
+        if (progress.done) {
+            res.json({ 
+                status: "done", 
+                url: progress.outputFile,
+                custo: progress.costs 
+            });
+        } else {
+            // Se der erro fatal no Lambda
+            if (progress.fatalErrorEncountered) {
+                 return res.status(500).json({ status: "error", error: progress.errors });
+            }
+
+            res.json({ 
+                status: "processing", 
+                progress: Math.round(progress.overallProgress * 100) + "%"
+            });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.listen(3000, () => console.log("Servidor Lambda rodando na porta 3000"));
