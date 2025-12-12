@@ -16,9 +16,6 @@ app.get("/", (req, res) => res.send("Controlador Remotion Lambda OK!"));
  * Resolve o Serve URL:
  * - Se REMOTION_SERVE_URL existir: reutiliza (recomendado para produção)
  * - Se não existir: faz deploy do site e retorna o serveUrl
- *
- * Observação: usar `siteName` fixo faz com que o deploy sobrescreva o mesmo “site”
- * em vez de criar um novo aleatório toda vez. [web:171]
  */
 const resolveServeUrl = async ({ region }) => {
   const fromEnv = process.env.REMOTION_SERVE_URL;
@@ -47,7 +44,14 @@ const resolveServeUrl = async ({ region }) => {
 // Rota de Renderização (assíncrona)
 app.post("/render", async (req, res) => {
   try {
-    const inputProps = req.body;
+    // 1. Recebe os dados do corpo (incluindo imagens, audioUrl e agora legendasSrt)
+    const inputProps = req.body || {};
+
+    // DEBUG: Verifica o que chegou
+    console.log("=== NOVA REQUISICÃO DE RENDER ===");
+    console.log(`Audio URL: ${inputProps.audioUrl ? "Sim" : "Não"}`);
+    console.log(`Imagens: ${inputProps.imagens?.length || 0}`);
+    console.log(`Legendas (SRT): ${inputProps.legendasSrt ? "Sim (Presente)" : "Não"}`);
 
     const region = process.env.REMOTION_AWS_REGION;
     if (!region) {
@@ -63,13 +67,17 @@ app.post("/render", async (req, res) => {
     const serveUrl = await resolveServeUrl({ region });
 
     console.log("2) Calculando duração...");
-    let duracao = 300; // default 10s @ 30fps
-    if (inputProps.imagens && Array.isArray(inputProps.imagens)) {
+    let duracao = 300; // default 10s @ 30fps (caso não venham imagens)
+    
+    // Cálculo baseado nas imagens (prioridade)
+    if (inputProps.imagens && Array.isArray(inputProps.imagens) && inputProps.imagens.length > 0) {
       const seg = inputProps.imagens.reduce(
         (acc, img) => acc + (img.duracaoEmSegundos || 5),
         0
       );
-      duracao = Math.ceil(seg * 30); // 30fps fixo (seu caso)
+      duracao = Math.ceil(seg * 30); // 30fps fixo
+    } else {
+        console.warn("AVISO: Nenhuma imagem fornecida, usando duração padrão de 10s (300 frames).");
     }
 
     console.log(
@@ -81,26 +89,17 @@ app.post("/render", async (req, res) => {
       functionName,
       serveUrl,
       composition: inputProps.modeloId || "VideoLongo",
-      inputProps,
+      
+      // AQUI ESTÁ O SEGREDO:
+      // Passamos o inputProps inteiro. O Remotion vai receber { audioUrl, imagens, legendasSrt }
+      inputProps: inputProps,
+      
       codec: "h264",
-
-      /**
-       * Melhor controle que framesPerLambda:
-       * - `concurrency` define quantas Lambdas de render serão usadas.
-       * - Remotion calcula framesPerLambda automaticamente. [web:12][web:195]
-       *
-       * Para 27.000 frames:
-       * - concurrency 100 => ~100 renderizadores + 1 orquestrador (na prática, fica dentro do limite do Remotion)
-       */
       concurrency: Number(process.env.REMOTION_CONCURRENCY || 100),
-
-      // Timeout máximo da AWS Lambda (15 min)
       timeoutInSeconds: 900,
-
-      // Re-tentativas leves
       retries: 1,
 
-      // Passa duração para a composição (se sua composição usar isso)
+      // Força a duração calculada aqui no servidor
       defaultProps: {
         durationInFrames: duracao,
       },
@@ -112,7 +111,7 @@ app.post("/render", async (req, res) => {
       region,
       bucketName: outputBucket,
       checkUrl: `/status/${renderId}`,
-      serveUrlUsed: serveUrl, // útil para você copiar e fixar no REMOTION_SERVE_URL
+      serveUrlUsed: serveUrl, 
     });
   } catch (err) {
     console.error("ERRO CRÍTICO NO RENDER:", err);
@@ -127,7 +126,7 @@ app.get("/status/:renderId", async (req, res) => {
 
     const region = process.env.REMOTION_AWS_REGION;
     if (!region) {
-      throw new Error("Faltou configurar REMOTION_AWS_REGION (ex: us-east-2).");
+      throw new Error("Faltou configurar REMOTION_AWS_REGION.");
     }
 
     const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME;
