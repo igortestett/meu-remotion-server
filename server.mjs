@@ -12,11 +12,6 @@ app.use(express.json());
 
 app.get("/", (req, res) => res.send("Controlador Remotion Lambda OK!"));
 
-/**
- * Resolve o Serve URL:
- * - Se REMOTION_SERVE_URL existir: reutiliza (recomendado para produção)
- * - Se não existir: faz deploy do site e retorna o serveUrl
- */
 const resolveServeUrl = async ({ region }) => {
   const fromEnv = process.env.REMOTION_SERVE_URL;
   if (fromEnv && fromEnv.trim().length > 0) {
@@ -37,21 +32,43 @@ const resolveServeUrl = async ({ region }) => {
     siteName,
   });
 
-  console.log("Serve URL gerado (salve no Easypanel como REMOTION_SERVE_URL):", serveUrl);
+  console.log(
+    "Serve URL gerado (salve no Easypanel como REMOTION_SERVE_URL):",
+    serveUrl
+  );
   return serveUrl;
 };
 
 // Rota de Renderização (assíncrona)
 app.post("/render", async (req, res) => {
   try {
-    // 1. Recebe os dados do corpo (incluindo imagens, audioUrl e agora legendasSrt)
+    // 1. Recebe os dados do corpo (incluindo videos, imagens, audioUrl, legendaUrl)
     const inputProps = req.body || {};
 
+    // 1.1 Se vier legendaUrl mas não vier legendasSrt, baixa o SRT aqui no servidor
+    if (inputProps.legendaUrl && !inputProps.legendasSrt) {
+      console.log("Baixando SRT a partir de legendaUrl...");
+      const r = await fetch(inputProps.legendaUrl);
+      if (!r.ok) {
+        throw new Error(
+          `Falha ao baixar SRT da URL ${inputProps.legendaUrl}: ${r.status} ${r.statusText}`
+        );
+      }
+      inputProps.legendasSrt = await r.text();
+    }
+
     // DEBUG: Verifica o que chegou
-    console.log("=== NOVA REQUISICÃO DE RENDER ===");
-    console.log(`Audio URL: ${inputProps.audioUrl ? "Sim" : "Não"}`);
+    console.log("=== NOVA REQUISIÇÃO DE RENDER ===");
+    console.log(`Modelo: ${inputProps.modeloId || "VideoLongo"}`);
+    console.log(`Videos: ${inputProps.videos?.length || 0}`);
     console.log(`Imagens: ${inputProps.imagens?.length || 0}`);
-    console.log(`Legendas (SRT): ${inputProps.legendasSrt ? "Sim (Presente)" : "Não"}`);
+    console.log(`Audio URL: ${inputProps.audioUrl ? "Sim" : "Não"}`);
+    console.log(`Legenda URL: ${inputProps.legendaUrl ? "Sim" : "Não"}`);
+    console.log(
+      `Legendas (SRT em texto): ${
+        inputProps.legendasSrt ? "Sim (Presente)" : "Não"
+      }`
+    );
 
     const region = process.env.REMOTION_AWS_REGION;
     if (!region) {
@@ -66,39 +83,18 @@ app.post("/render", async (req, res) => {
     console.log("1) Resolvendo serveUrl (reutilizável)...");
     const serveUrl = await resolveServeUrl({ region });
 
-    console.log("2) Calculando duração...");
-    let duracao = 300; // default 10s @ 30fps (caso não venham imagens)
-    
-    // Cálculo baseado nas imagens (prioridade)
-    if (inputProps.imagens && Array.isArray(inputProps.imagens) && inputProps.imagens.length > 0) {
-      const seg = inputProps.imagens.reduce(
-        (acc, img) => acc + (img.duracaoEmSegundos || 5),
-        0
-      );
-      duracao = Math.ceil(seg * 30); // 30fps fixo
-    } else {
-        console.warn("AVISO: Nenhuma imagem fornecida, usando duração padrão de 10s (300 frames).");
-    }
-
-    console.log(
-      `3) Disparando render. region=${region} function=${functionName} frames=${duracao}`
-    );
+    console.log("2) Disparando render no Lambda...");
 
     const { renderId, bucketName: outputBucket } = await renderMediaOnLambda({
       region,
       functionName,
       serveUrl,
       composition: inputProps.modeloId || "VideoLongo",
-      
-      // AQUI ESTÁ O SEGREDO:
-      // Passamos o inputProps inteiro. O Remotion vai receber { audioUrl, imagens, legendasSrt }
-      inputProps: inputProps,
-      
+      inputProps, // passa tudo: videos, imagens, audioUrl, legendasSrt, legendaUrl
       codec: "h264",
       concurrency: Number(process.env.REMOTION_CONCURRENCY || 100),
       timeoutInSeconds: 900,
       retries: 1,
-
     });
 
     res.json({
@@ -107,7 +103,7 @@ app.post("/render", async (req, res) => {
       region,
       bucketName: outputBucket,
       checkUrl: `/status/${renderId}`,
-      serveUrlUsed: serveUrl, 
+      serveUrlUsed: serveUrl,
     });
   } catch (err) {
     console.error("ERRO CRÍTICO NO RENDER:", err);
@@ -165,4 +161,6 @@ app.get("/status/:renderId", async (req, res) => {
   }
 });
 
-app.listen(3000, () => console.log("Servidor Lambda rodando na porta 3000"));
+app.listen(3000, () =>
+  console.log("Servidor Lambda rodando na porta 3000")
+);
