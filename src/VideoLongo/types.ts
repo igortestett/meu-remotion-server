@@ -1,21 +1,33 @@
 import { z } from "zod";
 
+// Schema para Vídeos
+// A duração é opcional pois podemos calcular via metadata se não for enviada
+const VideoItemSchema = z.object({
+  url: z.string(),
+  duracaoEmSegundos: z.number().optional(),
+});
+
+// Schema para Imagens
+// Imagens precisam de duração explícita
+const ImagemItemSchema = z.object({
+  url: z.string(),
+  duracaoEmSegundos: z.number(),
+});
+
 export const VideoLongoSchema = z.object({
-  // Ajustado para optional() para casar com a lógica do componente (pode haver vídeos sem áudio)
+  // Áudio (Opcional)
   audioUrl: z.string().optional(),
   
-  // CAMPO NOVO: String contendo o texto do arquivo .srt
+  // Legendas (SRT direto ou URL)
   legendasSrt: z.string().optional(),
-  
-  // Mantido para compatibilidade, caso queira passar a URL ao invés do conteúdo direto
   legendaUrl: z.string().optional(),
 
-  imagens: z.array(
-    z.object({
-      url: z.string(),
-      duracaoEmSegundos: z.number(),
-    })
-  ),
+  // Listas de Mídia
+  // Usamos .optional().default([]) para que você possa enviar 
+  // um JSON sem a chave 'videos' ou 'imagens' e o código não quebre.
+  videos: z.array(VideoItemSchema).optional().default([]),
+  
+  imagens: z.array(ImagemItemSchema).optional().default([]),
 });
 
 export type VideoLongoProps = z.infer<typeof VideoLongoSchema>;
