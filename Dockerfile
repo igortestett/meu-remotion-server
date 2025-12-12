@@ -18,7 +18,8 @@ RUN npm install \
     @remotion/renderer \
     @remotion/transitions \
     @remotion/lambda \
-    mime-types \   
+    mime-types \ 
+    @remotion/captions \
     zod
 
 COPY . .
