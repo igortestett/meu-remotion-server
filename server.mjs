@@ -18,7 +18,7 @@ app.get("/", (req, res) => res.send("Controlador Lambda OTIMIZADO (15min timeout
 app.post("/render", async (req, res) => {
   try {
     const inputProps = req.body;
-    const region = process.env.REMOTION_AWS_REGION || "us-east-1";
+    const region = process.env.REMOTION_AWS_REGION || "us-east-2";
     
     // IMPORTANTE: Certifique-se de que esta variável no seu .env ou Easypanel
     // está apontando para a NOVA função que você criou (a que tem 900sec no nome/config)
@@ -105,7 +105,7 @@ app.post("/render", async (req, res) => {
 app.get("/status/:renderId", async (req, res) => {
     try {
         const { renderId } = req.params;
-        const region = process.env.REMOTION_AWS_REGION || "us-east-1";
+        const region = process.env.REMOTION_AWS_REGION || "us-east-2";
         const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME;
         
         const { bucketName } = await getOrCreateBucket({ region });
