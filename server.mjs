@@ -99,10 +99,6 @@ app.post("/render", async (req, res) => {
       timeoutInSeconds: 900,
       retries: 1,
 
-      // Força a duração calculada aqui no servidor
-      defaultProps: {
-        durationInFrames: duracao,
-      },
     });
 
     res.json({
