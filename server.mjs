@@ -72,7 +72,7 @@ app.post("/render", async (req, res) => {
       timeoutInSeconds: 900,
 
       // 3. Segurança contra falhas de rede
-      retries: 2,
+      retries: 1,
       
       // ------------------------------------------------
       
