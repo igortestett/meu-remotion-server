@@ -20,6 +20,7 @@ RUN npm install \
     @remotion/lambda \
     mime-types \ 
     @remotion/captions \
+    @remotion/media-utils \
     zod
 
 COPY . .
