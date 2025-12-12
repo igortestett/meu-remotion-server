@@ -61,7 +61,7 @@ export const VideoLongo = (props: VideoLongoProps) => {
   const timeline = useMemo(() => {
     let currentFrame = 0;
     const videoElements = videos.map((video, index) => {
-      const duracaoFrames = Math.round((video.duracaoEmSegundos || 5) * fps);
+      const duracaoFrames = Math.round((video.duracaoEmSegundos || 6) * fps);
       const element = (
         <Sequence from={currentFrame} durationInFrames={duracaoFrames} key={`video-${index}`}>
           <OffthreadVideo src={video.url} />
