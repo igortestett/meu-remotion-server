@@ -7,7 +7,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
   Sequence,
-  Video,
+  OffthreadVideo,
   useAsync, // <--- NOVO: Para buscar dados de uma URL
 } from 'remotion';
 import { TransitionSeries, linearTiming } from '@remotion/transitions';
@@ -64,7 +64,7 @@ export const VideoLongo = (props: VideoLongoProps) => {
       const duracaoFrames = Math.round((video.duracaoEmSegundos || 5) * fps);
       const element = (
         <Sequence from={currentFrame} durationInFrames={duracaoFrames} key={`video-${index}`}>
-          <Video src={video.url} />
+          <OffthreadVideo src={video.url} />
         </Sequence>
       );
       currentFrame += duracaoFrames;
