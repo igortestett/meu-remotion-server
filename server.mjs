@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import {
   deploySite,
   getOrCreateBucket,
@@ -6,9 +7,28 @@ import {
   getRenderProgress,
 } from "@remotion/lambda";
 import path from "path";
+import dotenv from "dotenv";
+import { z } from "zod";
+
+dotenv.config();
 
 const app = express();
 app.use(express.json());
+app.use(cors());
+
+const PORT = process.env.PORT || 3000;
+
+// Validação de variáveis de ambiente críticas
+const checkEnv = () => {
+  const required = ["REMOTION_AWS_REGION", "REMOTION_LAMBDA_FUNCTION_NAME"];
+  const missing = required.filter((key) => !process.env[key]);
+  if (missing.length > 0) {
+    console.error(`❌ Faltando variáveis de ambiente: ${missing.join(", ")}`);
+    process.exit(1);
+  }
+};
+
+checkEnv();
 
 app.get("/", (req, res) => res.send("Controlador Remotion Lambda OK!"));
 
@@ -18,11 +38,11 @@ const resolveServeUrl = async ({ region }) => {
     return fromEnv.trim();
   }
 
+  console.log("⚠️ REMOTION_SERVE_URL não definido. Fazendo deploy do site...");
   const entry = "./src/index.ts";
   const entryPoint = path.join(process.cwd(), entry);
 
   const { bucketName } = await getOrCreateBucket({ region });
-
   const siteName = process.env.REMOTION_SITE_NAME || "meu-gerador-video-prod";
 
   const { serveUrl } = await deploySite({
@@ -32,22 +52,31 @@ const resolveServeUrl = async ({ region }) => {
     siteName,
   });
 
-  console.log(
-    "Serve URL gerado (salve no Easypanel como REMOTION_SERVE_URL):",
-    serveUrl
-  );
+  console.log(`✅ Serve URL gerado: ${serveUrl}`);
+  console.log("💡 Salve no seu .env ou painel como REMOTION_SERVE_URL para evitar deploys desnecessários.");
+  
   return serveUrl;
 };
+
+// Schema de validação básica para entrada
+const RenderSchema = z.object({
+  modeloId: z.string().default("VideoLongo"),
+  videos: z.array(z.any()).optional(),
+  imagens: z.array(z.any()).optional(),
+  audioUrl: z.string().optional(),
+  legendaUrl: z.string().optional(),
+  legendasSrt: z.string().optional(),
+}).passthrough(); // Permite outras props
 
 // Rota de Renderização (assíncrona)
 app.post("/render", async (req, res) => {
   try {
-    // 1. Recebe os dados do corpo (incluindo videos, imagens, audioUrl, legendaUrl)
-    const inputProps = req.body || {};
+    const body = RenderSchema.parse(req.body);
+    const inputProps = body;
 
     // 1.1 Se vier legendaUrl mas não vier legendasSrt, baixa o SRT aqui no servidor
     if (inputProps.legendaUrl && !inputProps.legendasSrt) {
-      console.log("Baixando SRT a partir de legendaUrl...");
+      console.log(`⬇️ Baixando SRT de: ${inputProps.legendaUrl}`);
       const r = await fetch(inputProps.legendaUrl);
       if (!r.ok) {
         throw new Error(
@@ -57,45 +86,31 @@ app.post("/render", async (req, res) => {
       inputProps.legendasSrt = await r.text();
     }
 
-    // DEBUG: Verifica o que chegou
     console.log("=== NOVA REQUISIÇÃO DE RENDER ===");
-    console.log(`Modelo: ${inputProps.modeloId || "VideoLongo"}`);
+    console.log(`Modelo: ${inputProps.modeloId}`);
     console.log(`Videos: ${inputProps.videos?.length || 0}`);
     console.log(`Imagens: ${inputProps.imagens?.length || 0}`);
-    console.log(`Audio URL: ${inputProps.audioUrl ? "Sim" : "Não"}`);
-    console.log(`Legenda URL: ${inputProps.legendaUrl ? "Sim" : "Não"}`);
-    console.log(
-      `Legendas (SRT em texto): ${
-        inputProps.legendasSrt ? "Sim (Presente)" : "Não"
-      }`
-    );
 
     const region = process.env.REMOTION_AWS_REGION;
-    if (!region) {
-      throw new Error("Faltou configurar REMOTION_AWS_REGION (ex: us-east-2).");
-    }
-
     const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME;
-    if (!functionName) {
-      throw new Error("Faltou configurar REMOTION_LAMBDA_FUNCTION_NAME.");
-    }
 
-    console.log("1) Resolvendo serveUrl (reutilizável)...");
     const serveUrl = await resolveServeUrl({ region });
 
-    console.log("2) Disparando render no Lambda...");
+    console.log("🚀 Disparando render no Lambda...");
 
     const { renderId, bucketName: outputBucket } = await renderMediaOnLambda({
       region,
       functionName,
       serveUrl,
-      composition: inputProps.modeloId || "VideoLongo",
-      inputProps, // passa tudo: videos, imagens, audioUrl, legendasSrt, legendaUrl
+      composition: inputProps.modeloId,
+      inputProps,
       codec: "h264",
-      concurrency: Number(process.env.REMOTION_CONCURRENCY || 100),
+      concurrency: Number(process.env.REMOTION_CONCURRENCY || 50), // Reduzido padrão para segurança
       timeoutInSeconds: 900,
       retries: 1,
     });
+
+    console.log(`✅ Render iniciado! ID: ${renderId}`);
 
     res.json({
       status: "rendering",
@@ -106,8 +121,11 @@ app.post("/render", async (req, res) => {
       serveUrlUsed: serveUrl,
     });
   } catch (err) {
-    console.error("ERRO CRÍTICO NO RENDER:", err);
-    res.status(500).json({ error: err.message, stack: err.stack });
+    console.error("❌ ERRO CRÍTICO NO RENDER:", err);
+    res.status(500).json({ 
+      error: err instanceof Error ? err.message : "Erro desconhecido", 
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
+    });
   }
 });
 
@@ -115,16 +133,8 @@ app.post("/render", async (req, res) => {
 app.get("/status/:renderId", async (req, res) => {
   try {
     const { renderId } = req.params;
-
     const region = process.env.REMOTION_AWS_REGION;
-    if (!region) {
-      throw new Error("Faltou configurar REMOTION_AWS_REGION.");
-    }
-
     const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME;
-    if (!functionName) {
-      throw new Error("Faltou configurar REMOTION_LAMBDA_FUNCTION_NAME.");
-    }
 
     const { bucketName } = await getOrCreateBucket({ region });
 
@@ -156,11 +166,11 @@ app.get("/status/:renderId", async (req, res) => {
       chunks: progress.chunks,
     });
   } catch (err) {
-    console.error("Erro ao checar status:", err);
+    console.error("❌ Erro ao checar status:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-app.listen(3000, () =>
-  console.log("Servidor Lambda rodando na porta 3000")
+app.listen(PORT, () =>
+  console.log(`🚀 Servidor Lambda rodando na porta ${PORT}`)
 );

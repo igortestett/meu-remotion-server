@@ -1,54 +1,68 @@
-# Remotion video
+# Meu Gerador de Vídeos Remotion
 
-<p align="center">
-  <a href="https://github.com/remotion-dev/logo">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/remotion-dev/logo/raw/main/animated-logo-banner-dark.gif">
-      <img alt="Animated Remotion Logo" src="https://github.com/remotion-dev/logo/raw/main/animated-logo-banner-light.gif">
-    </picture>
-  </a>
-</p>
+Este projeto é um servidor de renderização de vídeos utilizando [Remotion](https://www.remotion.dev/) e AWS Lambda.
 
-Welcome to your Remotion project!
+## Funcionalidades
 
-## Commands
+- Renderização de vídeos compostos por clipes e imagens.
+- Suporte a áudio de fundo.
+- Legendas automáticas via arquivo SRT ou URL.
+- Efeito Ken Burns em imagens.
+- API REST para controlar renderizações.
 
-**Install Dependencies**
+## Comandos
+
+**Instalar Dependências**
 
 ```console
 npm install
 ```
 
-**Start Preview**
+**Iniciar Servidor Local**
+
+```console
+npm start
+```
+
+**Pré-visualizar Vídeo (Remotion Studio)**
 
 ```console
 npm run dev
 ```
 
-**Render video**
+**Deploy da Infraestrutura (AWS Lambda)**
 
-```console
-npx remotion render
+1. Configure suas credenciais no `.env`.
+2. Faça o deploy do site (bundle):
+   ```console
+   npm run deploy:site
+   ```
+3. Faça o deploy da função Lambda:
+   ```console
+   npm run deploy:function
+   ```
+
+## API
+
+### POST /render
+
+Inicia a renderização de um vídeo.
+
+**Body:**
+```json
+{
+  "modeloId": "VideoLongo",
+  "videos": [
+    { "url": "https://exemplo.com/video1.mp4" }
+  ],
+  "imagens": [
+    { "url": "https://exemplo.com/imagem1.jpg", "duracaoEmSegundos": 5 }
+  ],
+  "audioUrl": "https://exemplo.com/audio.mp3",
+  "legendaUrl": "https://exemplo.com/legendas.srt"
+}
 ```
 
-**Upgrade Remotion**
+### GET /status/:renderId
 
-```console
-npx remotion upgrade
-```
-
-## Docs
-
-Get started with Remotion by reading the [fundamentals page](https://www.remotion.dev/docs/the-fundamentals).
-
-## Help
-
-We provide help on our [Discord server](https://discord.gg/6VzzNDwUwV).
-
-## Issues
-
-Found an issue with Remotion? [File an issue here](https://github.com/remotion-dev/remotion/issues/new).
-
-## License
-
-Note that for some entities a company license is needed. [Read the terms here](https://github.com/remotion-dev/remotion/blob/main/LICENSE.md).
+Verifica o progresso da renderização.

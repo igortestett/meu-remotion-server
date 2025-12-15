@@ -1,6 +1,6 @@
 // src/Compositions/VideoLongo.tsx
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import {
   AbsoluteFill,
   Audio,
@@ -8,31 +8,37 @@ import {
   useVideoConfig,
   Sequence,
   OffthreadVideo,
-  useAsync, // <--- NOVO: Para buscar dados de uma URL
+  delayRender,
+  continueRender,
 } from 'remotion';
 import { TransitionSeries, linearTiming } from '@remotion/transitions';
 import { fade } from '@remotion/transitions/fade';
 import { parseSrt } from '@remotion/captions';
 import { 
   CalculateMetadataFunction, 
-  getVideoMetadata 
-} from 'remotion'; 
+} from 'remotion';
+import { getVideoMetadata } from '@remotion/media-utils';
 
-import { VideoLongoProps } from '../types';
-import { CenaImagem } from '../components/CenaImagem';
+import { VideoLongoProps } from './types';
+import { CenaImagem } from './CenaImagem';
 
 // A função de metadados não precisa mudar, pois ela não depende das legendas.
 export const calculateVideoLongoMetadata: CalculateMetadataFunction<VideoLongoProps> = async ({
   props,
-  fps,
 }) => {
+  const fps = 30;
   let duracaoTotalSegundos = 0;
 
   const duracoesVideos = await Promise.all(
     props.videos.map(async (video) => {
       if (video.duracaoEmSegundos) return video.duracaoEmSegundos;
-      const meta = await getVideoMetadata(video.url);
-      return meta.durationInSeconds;
+      try {
+        const meta = await getVideoMetadata(video.url);
+        return meta.durationInSeconds;
+      } catch (e) {
+        console.error("Erro metadados video", e);
+        return 5;
+      }
     })
   );
   duracaoTotalSegundos += duracoesVideos.reduce((sum, dur) => sum + dur, 0);
@@ -52,62 +58,109 @@ export const calculateVideoLongoMetadata: CalculateMetadataFunction<VideoLongoPr
 
 // --- COMPONENTE 100% CORRIGIDO ---
 export const VideoLongo = (props: VideoLongoProps) => {
-  // Adiciona `legendaUrl` à desestruturação das props
-  const { videos, imagens, audioUrl, legendasSrt, legendaUrl } = props;
+  // Props desestruturadas com os novos campos de áudio
+  const { 
+    videos, 
+    imagens, 
+    // Áudio
+    audioUrl, 
+    musicaUrl, 
+    volumeMusica = 0.1, // Default baixo para fundo
+    narracaoUrl, 
+    volumeNarracao = 1.0, // Default alto para voz
+    // Legendas
+    legendasSrt, 
+    legendaUrl 
+  } = props;
+  
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // --- LÓGICA DA LINHA DO TEMPO (mantida igual) ---
+  // Define qual URL usar para música de fundo (prioriza musicaUrl)
+  const backgroundAudio = musicaUrl || audioUrl;
+
+  // --- LÓGICA DA LINHA DO TEMPO REFORMULADA ---
   const timeline = useMemo(() => {
     let currentFrame = 0;
-    const videoElements = videos.map((video, index) => {
-      const duracaoFrames = Math.round((video.duracaoEmSegundos || 6) * fps);
+    
+    // 1. Processa vídeos
+    const videoSequences = videos.map((video, index) => {
+      // Se tiver duração definida, usa. Se não, usa um padrão (mas idealmente o metadata já preencheu isso)
+      const duracaoFrames = Math.round((video.duracaoEmSegundos || 5) * fps);
+      
       const element = (
-        <Sequence from={currentFrame} durationInFrames={duracaoFrames} key={`video-${index}`}>
-          <OffthreadVideo src={video.url} />
+        <Sequence 
+          from={currentFrame} 
+          durationInFrames={duracaoFrames} 
+          key={`video-${index}`}
+        >
+          <OffthreadVideo 
+            src={video.url} 
+            // Garante que o vídeo não tenha áudio se não for desejado, 
+            // mas o usuário disse "vídeos não possuem áudio", então OffthreadVideo padrão já serve.
+            // Se quisesse forçar mudo: muted={true}
+          />
         </Sequence>
       );
+      
       currentFrame += duracaoFrames;
       return element;
     });
+
     const startFrameParaImagens = currentFrame;
-    return { videoElements, startFrameParaImagens };
+
+    return { videoSequences, startFrameParaImagens };
   }, [videos, fps]);
   
   // --- LÓGICA DAS LEGENDAS CORRIGIDA PARA USAR URL ---
-  // 1. Buscamos o conteúdo do SRT de forma assíncrona
-  const srtContent = useAsync(async () => {
-    // Prioridade para a URL
-    if (legendaUrl) {
-      try {
-        const response = await fetch(legendaUrl);
-        if (!response.ok) return null; // Falha na requisição
-        return await response.text();
-      } catch (e) {
-        console.error("Falha ao buscar SRT da URL", e);
-        return null;
+  const [handle] = useState(() => delayRender());
+  const [srtData, setSrtData] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadSrt = async () => {
+      if (legendaUrl) {
+        try {
+          const response = await fetch(legendaUrl);
+          if (response.ok) {
+            const text = await response.text();
+            if (mounted) setSrtData(text);
+          }
+        } catch (e) {
+          console.error("Falha ao buscar SRT da URL", e);
+        }
+      } else if (legendasSrt) {
+        if (mounted) setSrtData(legendasSrt);
       }
-    }
-    // Fallback para o conteúdo direto
-    return legendasSrt || null;
-  }, [legendaUrl, legendasSrt]);
+      
+      if (mounted) continueRender(handle);
+    };
+
+    loadSrt();
+
+    return () => {
+      mounted = false;
+    };
+  }, [legendaUrl, legendasSrt, handle]);
 
   // 2. Fazemos o parse do conteúdo quando ele estiver disponível
   const currentCaption = useMemo(() => {
     // Se o conteúdo ainda não foi carregado ou não existe, não faz nada.
-    if (!srtContent.data) return null;
+    if (!srtData) return null;
     
-    const captions = parseSrt({ input: srtContent.data, fps }).captions;
-    return captions.find(c => frame >= c.startInFrames && frame <= c.endInFrames);
-  }, [frame, fps, srtContent.data]); // Depende do DADO carregado, não da prop
-
+    const { captions } = parseSrt({ input: srtData });
+    return captions.find((c: any) => frame >= c.startInFrames && frame <= c.endInFrames);
+  }, [srtData, frame]);
 
   return (
     <AbsoluteFill style={{ backgroundColor: 'black' }}>
-      {audioUrl && <Audio src={audioUrl} />}
-      {timeline.videoElements}
-      {imagens && imagens.length > 0 && (
-        <Sequence from={timeline.startFrameParaImagens}>
+      {/* Vídeos Sequenciais */}
+      {timeline.videoSequences}
+
+      {/* Imagens (após os vídeos) com Fade */}
+      <Sequence from={timeline.startFrameParaImagens}>
+        {imagens && imagens.length > 0 && (
           <TransitionSeries>
             {imagens.map((cena, index) => (
               <React.Fragment key={index}>
@@ -123,14 +176,37 @@ export const VideoLongo = (props: VideoLongoProps) => {
               </React.Fragment>
             ))}
           </TransitionSeries>
-        </Sequence>
+        )}
+      </Sequence>
+
+      {/* Música de Fundo */}
+      {backgroundAudio && (
+        <Audio 
+          src={backgroundAudio} 
+          volume={volumeMusica}
+        />
       )}
+
+      {/* Narração (Voz) */}
+      {narracaoUrl && (
+        <Audio 
+          src={narracaoUrl} 
+          volume={volumeNarracao}
+        />
+      )}
+
+      {/* Legendas */}
       {currentCaption && (
         <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 100 }}>
-          <div style={{
-              textAlign: 'center', fontSize: 50, color: 'white', fontFamily: 'sans-serif',
-              fontWeight: 'bold', textShadow: '2px 2px 4px rgba(0,0,0,0.8)', padding: '0 30px', maxWidth: '90%'
-            }}>
+          <div style={{ 
+            fontSize: 50, 
+            color: 'white', 
+            textShadow: '2px 2px 4px black',
+            textAlign: 'center',
+            padding: 20,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            borderRadius: 10
+          }}>
             {currentCaption.text}
           </div>
         </AbsoluteFill>

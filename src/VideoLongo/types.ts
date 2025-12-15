@@ -18,7 +18,13 @@ export const VideoLongoSchema = z.object({
   videos: z.array(VideoItemSchema).optional().default([]),
   imagens: z.array(ImagemItemSchema).optional().default([]),
 
-  audioUrl: z.string().optional(),
+  // Áudio e Narração
+  audioUrl: z.string().optional().describe("URL para música de fundo (legado, prefira musicaUrl)"),
+  musicaUrl: z.string().optional().describe("URL para música de fundo"),
+  volumeMusica: z.number().min(0).max(1).optional().default(0.1),
+  
+  narracaoUrl: z.string().optional().describe("URL para narração/voz"),
+  volumeNarracao: z.number().min(0).max(1).optional().default(1.0),
 
   // legenda pode vir como conteúdo (string) OU por URL
   legendasSrt: z.string().optional(),
