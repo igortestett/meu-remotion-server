@@ -58,7 +58,9 @@ Inicia a renderização de um vídeo.
   "imagens": [
     { "url": "https://exemplo.com/imagem1.jpg", "duracaoEmSegundos": 5 }
   ],
-  "audioUrl": "https://exemplo.com/audio.mp3",
+  "musicaUrl": "https://exemplo.com/fundo.mp3",
+  "volumeMusica": 0.1,
+  "narracaoUrl": "https://exemplo.com/voz.mp3",
   "legendaUrl": "https://exemplo.com/legendas.srt"
 }
 ```

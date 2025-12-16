@@ -51,10 +51,10 @@ export const RemotionRoot: React.FC = () => {
         schema={VideoLongoSchema}
         calculateMetadata={calculateMetadata}
         fps={30}
-        width={1080}
-        height={1920}
+        width={1920}
+        height={1080}
         defaultProps={{
-          musicaUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+          musicaUrl: undefined,
           volumeMusica: 0.1,
           narracaoUrl: undefined,
           volumeNarracao: 1.0,
