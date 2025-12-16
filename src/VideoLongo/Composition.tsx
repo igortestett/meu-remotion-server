@@ -148,10 +148,27 @@ export const VideoLongo = (props: VideoLongoProps) => {
   const currentCaption = useMemo(() => {
     // Se o conteúdo ainda não foi carregado ou não existe, não faz nada.
     if (!srtData) return null;
-    
-    const { captions } = parseSrt({ input: srtData });
-    return captions.find((c: any) => frame >= c.startInFrames && frame <= c.endInFrames);
-  }, [srtData, frame]);
+
+    try {
+      const { captions } = parseSrt({ input: srtData });
+
+      return captions.find((c: any) => {
+        const startInFrames =
+          typeof c.startInFrames === 'number'
+            ? c.startInFrames
+            : Math.floor((c.startInSeconds ?? 0) * fps);
+
+        const endInFrames =
+          typeof c.endInFrames === 'number'
+            ? c.endInFrames
+            : Math.ceil((c.endInSeconds ?? 0) * fps);
+
+        return frame >= startInFrames && frame <= endInFrames;
+      });
+    } catch (e) {
+      return null;
+    }
+  }, [srtData, frame, fps]);
 
   return (
     <AbsoluteFill style={{ backgroundColor: 'black' }}>
