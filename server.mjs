@@ -42,14 +42,11 @@ app.get("/test-connection", async (req, res) => {
     console.log("📡 Testando conectividade externa...");
     const start = Date.now();
     
-    // Teste 1: Google (Conectividade Geral)
     const google = await fetch("https://www.google.com", { method: "HEAD" });
     
-    // Teste 2: AWS S3 (Conectividade AWS)
     const awsUrl = `https://s3.${process.env.REMOTION_AWS_REGION}.amazonaws.com`;
     const aws = await fetch(awsUrl, { method: "HEAD" });
 
-    // Teste 3: SDK Remotion (Credenciais e Permissões)
     let sdkStatus = "Não testado";
     try {
       const fns = await getFunctions({ region: process.env.REMOTION_AWS_REGION });
@@ -190,8 +187,7 @@ app.post("/render", async (req, res) => {
     console.log(`   - Input Props (Size): ${JSON.stringify(inputProps).length} chars`);
 
     try {
-      // Wrapper com timeout aumentado para redes lentas
-      const timeoutMs = 40000; // 40 segundos
+      const timeoutMs = 40000;
       const renderPromise = renderMediaOnLambda({
         region,
         functionName,
