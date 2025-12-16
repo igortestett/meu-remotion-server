@@ -109,6 +109,7 @@ app.post("/render", async (req, res) => {
         concurrency: Number(process.env.REMOTION_CONCURRENCY || 50),
         timeoutInSeconds: 900,
         retries: 1,
+        logLevel: "verbose", // Log detalhado para debugar travamento
       });
 
       console.log(`✅ Render iniciado! ID: ${renderId}`);
