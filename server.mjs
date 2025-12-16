@@ -158,13 +158,24 @@ app.post("/render", async (req, res) => {
     // 1.1 Se vier legendaUrl mas não vier legendasSrt, baixa o SRT aqui no servidor
     if (inputProps.legendaUrl && !inputProps.legendasSrt) {
       console.log(`⬇️ Baixando SRT de: ${inputProps.legendaUrl}`);
-      const r = await fetch(inputProps.legendaUrl);
+      const r = await fetch(inputProps.legendaUrl, { redirect: "follow" });
       if (!r.ok) {
         throw new Error(
           `Falha ao baixar SRT da URL ${inputProps.legendaUrl}: ${r.status} ${r.statusText}`
         );
       }
-      inputProps.legendasSrt = await r.text();
+
+      const text = await r.text();
+      const head = text.slice(0, 400);
+      if (!head.includes("-->")) {
+        throw new Error(
+          `Conteúdo baixado de ${inputProps.legendaUrl} não parece SRT (head: ${JSON.stringify(
+            head
+          )})`
+        );
+      }
+
+      inputProps.legendasSrt = text;
       inputProps.legendaUrl = undefined;
     }
 

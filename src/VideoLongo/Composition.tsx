@@ -209,7 +209,14 @@ export const VideoLongo = (props: VideoLongoProps) => {
 
       {/* Legendas */}
       {currentCaption && (
-        <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 100 }}>
+        <AbsoluteFill
+          style={{
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            paddingBottom: 100,
+            zIndex: 10,
+          }}
+        >
           <div style={{ 
             fontSize: 50, 
             color: 'white', 
