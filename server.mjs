@@ -32,6 +32,34 @@ checkEnv();
 
 app.get("/", (req, res) => res.send("Controlador Remotion Lambda OK!"));
 
+app.get("/test-connection", async (req, res) => {
+  try {
+    console.log("📡 Testando conectividade externa...");
+    const start = Date.now();
+    
+    // Teste 1: Google (Conectividade Geral)
+    const google = await fetch("https://www.google.com", { method: "HEAD" });
+    
+    // Teste 2: AWS S3 (Conectividade AWS)
+    const awsUrl = `https://s3.${process.env.REMOTION_AWS_REGION}.amazonaws.com`;
+    const aws = await fetch(awsUrl, { method: "HEAD" });
+
+    res.json({
+      status: "ok",
+      internet: google.ok ? "OK" : "FALHA",
+      aws: aws.ok || aws.status === 403 ? "OK (Acessível)" : `FALHA (${aws.status})`,
+      latency: `${Date.now() - start}ms`
+    });
+  } catch (err) {
+    console.error("❌ Erro de conexão:", err);
+    res.status(500).json({ 
+      status: "error", 
+      message: "Servidor sem acesso à internet ou bloqueado por Firewall.",
+      details: err.message 
+    });
+  }
+});
+
 const resolveServeUrl = async ({ region }) => {
   const fromEnv = process.env.REMOTION_SERVE_URL;
   if (fromEnv && fromEnv.trim().length > 0) {
@@ -106,8 +134,8 @@ app.post("/render", async (req, res) => {
     console.log(`   - Input Props (Size): ${JSON.stringify(inputProps).length} chars`);
 
     try {
-      // Wrapper com timeout para evitar travamento eterno
-      const timeoutMs = 20000; // 20 segundos para iniciar
+      // Wrapper com timeout aumentado para redes lentas
+      const timeoutMs = 40000; // 40 segundos
       const renderPromise = renderMediaOnLambda({
         region,
         functionName,
