@@ -30,7 +30,8 @@ const inputProps = {
     }
   ],
   narracaoUrl: "https://auto4-minio.5b1qbq.easypanel.host/nca-toolkit/merged_66028.wav",
-  volumeNarracao: 1.0
+  volumeNarracao: 1.0,
+  legendaUrl: "https://drive.google.com/uc?id=1y_-nZD90b_fWv9TkGq0OagbWgxa8wYjW&export=download",
 };
 
 console.log("🔧 Configuração:");
@@ -41,6 +42,29 @@ console.log(`ServeURL: ${serveUrl}`);
 async function run() {
   console.log("🚀 Iniciando teste isolado...");
   try {
+    if (inputProps.legendaUrl && !inputProps.legendasSrt) {
+      console.log(`⬇️ Baixando SRT de: ${inputProps.legendaUrl}`);
+      const r = await fetch(inputProps.legendaUrl, { redirect: "follow" });
+      if (!r.ok) {
+        throw new Error(
+          `Falha ao baixar SRT da URL ${inputProps.legendaUrl}: ${r.status} ${r.statusText}`
+        );
+      }
+
+      const text = await r.text();
+      const head = text.slice(0, 400);
+      if (!head.includes("-->")) {
+        throw new Error(
+          `Conteúdo baixado de ${inputProps.legendaUrl} não parece SRT (head: ${JSON.stringify(
+            head
+          )})`
+        );
+      }
+
+      inputProps.legendasSrt = text;
+      inputProps.legendaUrl = undefined;
+    }
+
     const result = await renderMediaOnLambda({
       region,
       functionName,

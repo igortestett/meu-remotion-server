@@ -113,8 +113,8 @@ export const VideoLongo = (props: VideoLongoProps) => {
   }, [videos, fps]);
   
   // --- LÓGICA DAS LEGENDAS CORRIGIDA PARA USAR URL ---
-  const [handle] = useState(() => delayRender());
-  const [srtData, setSrtData] = useState<string | null>(null);
+  const [handle] = useState(() => (legendasSrt || !legendaUrl ? null : delayRender()));
+  const [srtData, setSrtData] = useState<string | null>(legendasSrt ?? null);
 
   useEffect(() => {
     let mounted = true;
@@ -134,7 +134,7 @@ export const VideoLongo = (props: VideoLongoProps) => {
         }
       }
       
-      if (mounted) continueRender(handle);
+      if (mounted && handle) continueRender(handle);
     };
 
     loadSrt();

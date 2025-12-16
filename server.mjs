@@ -152,8 +152,13 @@ const RenderSchema = z.object({
 // Rota de Renderização (assíncrona)
 app.post("/render", async (req, res) => {
   try {
-    const body = RenderSchema.parse(req.body);
+    const rawBody = req.body?.inputProps ?? req.body?.props ?? req.body;
+    const body = RenderSchema.parse(rawBody);
     const inputProps = body;
+
+    if (inputProps.legendasSrt && inputProps.legendaUrl) {
+      inputProps.legendaUrl = undefined;
+    }
 
     // 1.1 Se vier legendaUrl mas não vier legendasSrt, baixa o SRT aqui no servidor
     if (inputProps.legendaUrl && !inputProps.legendasSrt) {
@@ -183,6 +188,8 @@ app.post("/render", async (req, res) => {
     console.log(`Modelo: ${inputProps.modeloId}`);
     console.log(`Videos: ${inputProps.videos?.length || 0}`);
     console.log(`Imagens: ${inputProps.imagens?.length || 0}`);
+    console.log(`Legendas: ${inputProps.legendasSrt ? "EMBUTIDA" : inputProps.legendaUrl ? "URL" : "NENHUMA"}`);
+    console.log(`Tamanho SRT: ${inputProps.legendasSrt ? inputProps.legendasSrt.length : 0} chars`);
 
     const region = process.env.REMOTION_AWS_REGION;
     const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME?.trim();
