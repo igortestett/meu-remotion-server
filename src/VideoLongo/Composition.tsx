@@ -120,7 +120,9 @@ export const VideoLongo = (props: VideoLongoProps) => {
     let mounted = true;
 
     const loadSrt = async () => {
-      if (legendaUrl) {
+      if (legendasSrt) {
+        if (mounted) setSrtData(legendasSrt);
+      } else if (legendaUrl) {
         try {
           const response = await fetch(legendaUrl);
           if (response.ok) {
@@ -130,8 +132,6 @@ export const VideoLongo = (props: VideoLongoProps) => {
         } catch (e) {
           console.error("Falha ao buscar SRT da URL", e);
         }
-      } else if (legendasSrt) {
-        if (mounted) setSrtData(legendasSrt);
       }
       
       if (mounted) continueRender(handle);

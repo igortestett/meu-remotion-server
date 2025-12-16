@@ -165,6 +165,7 @@ app.post("/render", async (req, res) => {
         );
       }
       inputProps.legendasSrt = await r.text();
+      inputProps.legendaUrl = undefined;
     }
 
     console.log("=== NOVA REQUISIÇÃO DE RENDER ===");
