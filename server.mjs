@@ -94,9 +94,15 @@ app.post("/render", async (req, res) => {
     const region = process.env.REMOTION_AWS_REGION;
     const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME;
 
+    console.log(`🔧 Configuração Lambda:`);
+    console.log(`   - Region: ${region}`);
+    console.log(`   - Function: ${functionName}`);
+
     const serveUrl = await resolveServeUrl({ region });
 
     console.log("🚀 Disparando render no Lambda...");
+    console.log(`   - Serve URL: ${serveUrl}`);
+    console.log(`   - Input Props: ${JSON.stringify(inputProps).substring(0, 100)}...`);
 
     try {
       const { renderId, bucketName: outputBucket } = await renderMediaOnLambda({
