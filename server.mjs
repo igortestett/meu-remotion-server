@@ -97,15 +97,18 @@ app.post("/render", async (req, res) => {
     console.log(`🔧 Configuração Lambda:`);
     console.log(`   - Region: ${region}`);
     console.log(`   - Function: ${functionName}`);
+    console.log(`   - AWS Key: ${process.env.AWS_ACCESS_KEY_ID ? process.env.AWS_ACCESS_KEY_ID.substring(0, 4) + '****' : 'MISSING'}`);
 
     const serveUrl = await resolveServeUrl({ region });
 
     console.log("🚀 Disparando render no Lambda...");
     console.log(`   - Serve URL: ${serveUrl}`);
-    console.log(`   - Input Props: ${JSON.stringify(inputProps).substring(0, 100)}...`);
+    console.log(`   - Input Props (Size): ${JSON.stringify(inputProps).length} chars`);
 
     try {
-      const { renderId, bucketName: outputBucket } = await renderMediaOnLambda({
+      // Wrapper com timeout para evitar travamento eterno
+      const timeoutMs = 20000; // 20 segundos para iniciar
+      const renderPromise = renderMediaOnLambda({
         region,
         functionName,
         serveUrl,
@@ -115,8 +118,13 @@ app.post("/render", async (req, res) => {
         concurrency: Number(process.env.REMOTION_CONCURRENCY || 50),
         timeoutInSeconds: 900,
         retries: 1,
-        logLevel: "verbose", // Log detalhado para debugar travamento
       });
+
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`Timeout de ${timeoutMs}ms ao tentar conectar com a AWS Lambda. Verifique credenciais e firewall.`)), timeoutMs)
+      );
+
+      const { renderId, bucketName: outputBucket } = await Promise.race([renderPromise, timeoutPromise]);
 
       console.log(`✅ Render iniciado! ID: ${renderId}`);
 
