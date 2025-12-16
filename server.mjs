@@ -5,6 +5,7 @@ import {
   getOrCreateBucket,
   renderMediaOnLambda,
   getRenderProgress,
+  getFunctions,
 } from "@remotion/lambda";
 import path from "path";
 import dotenv from "dotenv";
@@ -44,10 +45,20 @@ app.get("/test-connection", async (req, res) => {
     const awsUrl = `https://s3.${process.env.REMOTION_AWS_REGION}.amazonaws.com`;
     const aws = await fetch(awsUrl, { method: "HEAD" });
 
+    // Teste 3: SDK Remotion (Credenciais e Permissões)
+    let sdkStatus = "Não testado";
+    try {
+      const fns = await getFunctions({ region: process.env.REMOTION_AWS_REGION });
+      sdkStatus = `OK (Encontradas ${fns.length} funções)`;
+    } catch (sdkErr) {
+      sdkStatus = `FALHA (${sdkErr.message})`;
+    }
+
     res.json({
       status: "ok",
       internet: google.ok ? "OK" : "FALHA",
-      aws: aws.ok || aws.status === 403 ? "OK (Acessível)" : `FALHA (${aws.status})`,
+      aws: aws.ok || aws.status === 403 || aws.status === 405 ? "OK (Acessível)" : `FALHA (${aws.status})`,
+      sdk: sdkStatus,
       latency: `${Date.now() - start}ms`
     });
   } catch (err) {
@@ -120,7 +131,7 @@ app.post("/render", async (req, res) => {
     console.log(`Imagens: ${inputProps.imagens?.length || 0}`);
 
     const region = process.env.REMOTION_AWS_REGION;
-    const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME;
+    const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME?.trim();
 
     console.log(`🔧 Configuração Lambda:`);
     console.log(`   - Region: ${region}`);
