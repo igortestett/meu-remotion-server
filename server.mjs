@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import dns from "dns";
+import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import {
   deploySite,
   getOrCreateBucket,
@@ -12,6 +14,8 @@ import dotenv from "dotenv";
 import { z } from "zod";
 
 dotenv.config();
+
+dns.setDefaultResultOrder("ipv4first");
 
 const app = express();
 app.use(express.json());
@@ -67,6 +71,47 @@ app.get("/test-connection", async (req, res) => {
       status: "error", 
       message: "Servidor sem acesso à internet ou bloqueado por Firewall.",
       details: err.message 
+    });
+  }
+});
+
+app.get("/test-invoke", async (req, res) => {
+  const region = process.env.REMOTION_AWS_REGION;
+  const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME?.trim();
+
+  try {
+    const timeoutMs = 15000;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    const client = new LambdaClient({ region });
+    const payload = JSON.stringify({ method: "healthcheck" });
+    const command = new InvokeCommand({
+      FunctionName: functionName,
+      InvocationType: "RequestResponse",
+      Payload: new TextEncoder().encode(payload),
+    });
+
+    const result = await client.send(command, { abortSignal: controller.signal });
+    clearTimeout(timeout);
+
+    const decoded = result.Payload ? new TextDecoder().decode(result.Payload) : null;
+
+    res.json({
+      status: "ok",
+      region,
+      functionName,
+      statusCode: result.StatusCode,
+      functionError: result.FunctionError,
+      payload: decoded,
+    });
+  } catch (err) {
+    console.error("❌ Falha no /test-invoke:", err);
+    res.status(500).json({
+      status: "error",
+      region,
+      functionName,
+      error: err instanceof Error ? err.message : "Erro desconhecido",
     });
   }
 });
