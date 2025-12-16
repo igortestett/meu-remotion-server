@@ -144,31 +144,26 @@ export const VideoLongo = (props: VideoLongoProps) => {
     };
   }, [legendaUrl, legendasSrt, handle]);
 
-  // 2. Fazemos o parse do conteúdo quando ele estiver disponível
-  const currentCaption = useMemo(() => {
-    // Se o conteúdo ainda não foi carregado ou não existe, não faz nada.
+  const captions = useMemo(() => {
     if (!srtData) return null;
-
     try {
-      const { captions } = parseSrt({ input: srtData });
-
-      return captions.find((c: any) => {
-        const startInFrames =
-          typeof c.startInFrames === 'number'
-            ? c.startInFrames
-            : Math.floor((c.startInSeconds ?? 0) * fps);
-
-        const endInFrames =
-          typeof c.endInFrames === 'number'
-            ? c.endInFrames
-            : Math.ceil((c.endInSeconds ?? 0) * fps);
-
-        return frame >= startInFrames && frame <= endInFrames;
-      });
-    } catch (e) {
+      return parseSrt({ input: srtData }).captions;
+    } catch {
       return null;
     }
-  }, [srtData, frame, fps]);
+  }, [srtData]);
+
+  const currentCaption = useMemo(() => {
+    if (!captions) return null;
+
+    return captions.find((c: any) => {
+      const startMs = typeof c.startMs === 'number' ? c.startMs : 0;
+      const endMs = typeof c.endMs === 'number' ? c.endMs : 0;
+      const startInFrames = Math.floor((startMs / 1000) * fps);
+      const endInFrames = Math.ceil((endMs / 1000) * fps);
+      return frame >= startInFrames && frame <= endInFrames;
+    });
+  }, [captions, frame, fps]);
 
   return (
     <AbsoluteFill style={{ backgroundColor: 'black' }}>
