@@ -98,28 +98,33 @@ app.post("/render", async (req, res) => {
 
     console.log("🚀 Disparando render no Lambda...");
 
-    const { renderId, bucketName: outputBucket } = await renderMediaOnLambda({
-      region,
-      functionName,
-      serveUrl,
-      composition: inputProps.modeloId,
-      inputProps,
-      codec: "h264",
-      concurrency: Number(process.env.REMOTION_CONCURRENCY || 50), // Reduzido padrão para segurança
-      timeoutInSeconds: 900,
-      retries: 1,
-    });
+    try {
+      const { renderId, bucketName: outputBucket } = await renderMediaOnLambda({
+        region,
+        functionName,
+        serveUrl,
+        composition: inputProps.modeloId,
+        inputProps,
+        codec: "h264",
+        concurrency: Number(process.env.REMOTION_CONCURRENCY || 50),
+        timeoutInSeconds: 900,
+        retries: 1,
+      });
 
-    console.log(`✅ Render iniciado! ID: ${renderId}`);
+      console.log(`✅ Render iniciado! ID: ${renderId}`);
 
-    res.json({
-      status: "rendering",
-      renderId,
-      region,
-      bucketName: outputBucket,
-      checkUrl: `/status/${renderId}`,
-      serveUrlUsed: serveUrl,
-    });
+      res.json({
+        status: "rendering",
+        renderId,
+        region,
+        bucketName: outputBucket,
+        checkUrl: `/status/${renderId}`,
+        serveUrlUsed: serveUrl,
+      });
+    } catch (lambdaError) {
+      console.error("❌ Erro específico ao invocar Lambda:", lambdaError);
+      throw lambdaError; // Re-lança para o catch global tratar
+    }
   } catch (err) {
     console.error("❌ ERRO CRÍTICO NO RENDER:", err);
     res.status(500).json({ 
