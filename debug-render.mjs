@@ -72,6 +72,9 @@ async function run() {
       composition: "VideoLongo",
       inputProps,
       codec: "h264",
+      crf: 26, // Otimização de tamanho
+      audioBitrate: "128k", // Otimização de áudio
+      pixelFormat: "yuv420p",
       logLevel: "verbose",
     });
     console.log("✅ SUCESSO:", result);

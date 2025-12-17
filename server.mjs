@@ -214,6 +214,9 @@ app.post("/render", async (req, res) => {
         composition: inputProps.modeloId,
         inputProps,
         codec: "h264",
+        crf: 26, // Otimização de tamanho (padrão 23, maior = menor arquivo/menor qualidade)
+        audioBitrate: "128k", // Otimização de áudio
+        pixelFormat: "yuv420p", // Garante compatibilidade
         concurrency: Number(process.env.REMOTION_CONCURRENCY || 50),
         timeoutInSeconds: 900,
         retries: 1,
