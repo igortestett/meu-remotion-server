@@ -7,7 +7,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
   Sequence,
-  OffthreadVideo,
+  Video,
   delayRender,
   continueRender,
 } from 'remotion';
@@ -94,10 +94,10 @@ export const VideoLongo = (props: VideoLongoProps) => {
           durationInFrames={duracaoFrames} 
           key={`video-${index}`}
         >
-          <OffthreadVideo 
+          <Video 
             src={video.url} 
             // Garante que o vídeo não tenha áudio se não for desejado, 
-            // mas o usuário disse "vídeos não possuem áudio", então OffthreadVideo padrão já serve.
+            // mas o usuário disse "vídeos não possuem áudio", então Video padrão já serve.
             // Se quisesse forçar mudo: muted={true}
           />
         </Sequence>
