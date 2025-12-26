@@ -10,6 +10,7 @@ import {
   Video,
   delayRender,
   continueRender,
+  cancelRender,
 } from 'remotion';
 import { TransitionSeries, linearTiming } from '@remotion/transitions';
 import { fade } from '@remotion/transitions/fade';
@@ -112,37 +113,52 @@ export const VideoLongo = (props: VideoLongoProps) => {
     return { videoSequences, startFrameParaImagens };
   }, [videos, fps]);
   
-  // --- LÓGICA DAS LEGENDAS CORRIGIDA PARA USAR URL ---
-  const [handle] = useState(() => (legendasSrt || !legendaUrl ? null : delayRender()));
+  // --- LÓGICA DAS LEGENDAS CORRIGIDA COM TIMEOUT ---
+  const [handle] = useState(() => (legendasSrt || !legendaUrl ? null : delayRender('Fetching SRT...')));
   const [srtData, setSrtData] = useState<string | null>(legendasSrt ?? null);
 
   useEffect(() => {
-    let mounted = true;
+    // Se não há handle (ex: já temos SRT ou não há URL), apenas atualiza o estado se mudar props
+    if (!handle) {
+      if (legendasSrt) setSrtData(legendasSrt);
+      return;
+    }
 
-    const loadSrt = async () => {
-      if (legendasSrt) {
-        if (mounted) setSrtData(legendasSrt);
-      } else if (legendaUrl) {
-        try {
-          const response = await fetch(legendaUrl);
-          if (response.ok) {
-            const text = await response.text();
-            if (mounted) setSrtData(text);
-          }
-        } catch (e) {
-          console.error("Falha ao buscar SRT da URL", e);
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 15000);
+
+    (async () => {
+      try {
+        if (!legendaUrl) {
+          continueRender(handle);
+          return;
         }
+        
+        const res = await fetch(legendaUrl, { signal: controller.signal });
+        if (!res.ok) throw new Error(`SRT HTTP ${res.status}`);
+        
+        const text = await res.text();
+        setSrtData(text);
+        continueRender(handle);
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          cancelRender(new Error('Timeout fetching SRT'));
+        } else {
+          console.error("Erro ao buscar legendas:", err);
+          // Opcional: não cancelar render se falhar legenda, apenas continuar sem ela?
+          // Para segurança máxima, vamos continuar o render mesmo com erro
+          continueRender(handle); 
+        }
+      } finally {
+        clearTimeout(t);
       }
-      
-      if (mounted && handle) continueRender(handle);
-    };
-
-    loadSrt();
+    })();
 
     return () => {
-      mounted = false;
+      clearTimeout(t);
+      controller.abort();
     };
-  }, [legendaUrl, legendasSrt, handle]);
+  }, [handle, legendaUrl, legendasSrt]);
 
   const captions = useMemo(() => {
     if (!srtData) return null;
