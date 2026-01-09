@@ -11,6 +11,7 @@ import {
   delayRender,
   continueRender,
   cancelRender,
+  Loop,
 } from 'remotion';
 import { TransitionSeries, linearTiming } from '@remotion/transitions';
 import { fade } from '@remotion/transitions/fade';
@@ -18,7 +19,7 @@ import { parseSrt } from '@remotion/captions';
 import { 
   CalculateMetadataFunction, 
 } from 'remotion';
-import { getVideoMetadata } from '@remotion/media-utils';
+import { getAudioDurationInSeconds, getVideoMetadata } from '@remotion/media-utils';
 
 import { VideoLongoProps } from './types';
 import { CenaImagem } from './CenaImagem';
@@ -113,6 +114,38 @@ export const VideoLongo = (props: VideoLongoProps) => {
     return { videoSequences, startFrameParaImagens };
   }, [videos, fps]);
   
+  // --- LÓGICA DE DURAÇÃO DA NARRAÇÃO PARA LOOP ---
+  const [narracaoHandle] = useState(() => narracaoUrl ? delayRender('Fetching narration duration') : null);
+  const [narracaoDurationInFrames, setNarracaoDurationInFrames] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!narracaoHandle) return;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    (async () => {
+      try {
+        if (narracaoUrl) {
+          const durationInSeconds = await getAudioDurationInSeconds(narracaoUrl);
+          setNarracaoDurationInFrames(Math.ceil(durationInSeconds * fps));
+        }
+        continueRender(narracaoHandle);
+      } catch (err: any) {
+        console.error("Erro ao buscar duração da narração:", err);
+        // Se falhar, continuamos o render sem loop (ou sem áudio se for crítico, mas melhor não quebrar tudo)
+        continueRender(narracaoHandle);
+      } finally {
+        clearTimeout(timeout);
+      }
+    })();
+
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [narracaoHandle, narracaoUrl, fps]);
+
   // --- LÓGICA DAS LEGENDAS CORRIGIDA COM TIMEOUT ---
   const [handle] = useState(() => (legendasSrt || !legendaUrl ? null : delayRender('Fetching SRT...')));
   const [srtData, setSrtData] = useState<string | null>(legendasSrt ?? null);
@@ -215,12 +248,23 @@ export const VideoLongo = (props: VideoLongoProps) => {
         />
       )}
 
-      {/* Narração (Voz) */}
+      {/* Narração (Voz) - Com Loop se disponível */}
       {narracaoUrl && (
-        <Audio 
-          src={narracaoUrl} 
-          volume={volumeNarracao}
-        />
+        narracaoDurationInFrames ? (
+          <Loop durationInFrames={narracaoDurationInFrames}>
+            <Audio 
+              src={narracaoUrl} 
+              volume={volumeNarracao}
+            />
+          </Loop>
+        ) : (
+          // Fallback caso ainda não tenha carregado ou falhou (se bem que com delayRender deveria ter carregado)
+          // Mas se falhou o fetch, renderiza normal sem loop
+          <Audio 
+            src={narracaoUrl} 
+            volume={volumeNarracao}
+          />
+        )
       )}
 
       {/* Legendas */}
