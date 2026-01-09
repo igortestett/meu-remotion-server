@@ -145,9 +145,37 @@ const RenderSchema = z.object({
   videos: z.array(z.any()).optional(),
   imagens: z.array(z.any()).optional(),
   audioUrl: z.string().optional(),
+  musicaUrl: z.string().optional(),
+  narracaoUrl: z.string().optional(),
   legendaUrl: z.string().optional(),
   legendasSrt: z.string().optional(),
 }).passthrough(); // Permite outras props
+
+// Helper para converter Google Drive View Link -> Direct Download Link
+const normalizeDriveUrl = (url) => {
+  if (!url || typeof url !== 'string') return url;
+  
+  // Se já for um link de exportação/download, retorna
+  if (url.includes('export=download') || url.includes('e=download')) return url;
+
+  // 1. Padrão /file/d/ID/view
+  // Ex: https://drive.google.com/file/d/10hVj9g8exnuII0TNCb2lytSZYf8chrlH/view?usp=sharing
+  const fileIdMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (fileIdMatch && fileIdMatch[1]) {
+    console.log(`🔄 Convertendo URL Drive (File ID): ${url}`);
+    return `https://drive.google.com/uc?export=download&id=${fileIdMatch[1]}`;
+  }
+
+  // 2. Padrão id=ID
+  // Ex: https://drive.google.com/open?id=10hVj9g8exnuII0TNCb2lytSZYf8chrlH
+  const idParamMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idParamMatch && idParamMatch[1] && url.includes('drive.google.com')) {
+    console.log(`🔄 Convertendo URL Drive (ID Param): ${url}`);
+    return `https://drive.google.com/uc?export=download&id=${idParamMatch[1]}`;
+  }
+
+  return url;
+};
 
 // Rota de Renderização (assíncrona)
 app.post("/render", async (req, res) => {
@@ -155,6 +183,29 @@ app.post("/render", async (req, res) => {
     const rawBody = req.body?.inputProps ?? req.body?.props ?? req.body;
     const body = RenderSchema.parse(rawBody);
     const inputProps = body;
+
+    // --- NORMALIZAÇÃO DE URLS (DRIVE FIX) ---
+    inputProps.audioUrl = normalizeDriveUrl(inputProps.audioUrl);
+    inputProps.musicaUrl = normalizeDriveUrl(inputProps.musicaUrl);
+    inputProps.narracaoUrl = normalizeDriveUrl(inputProps.narracaoUrl);
+    inputProps.legendaUrl = normalizeDriveUrl(inputProps.legendaUrl);
+
+    if (Array.isArray(inputProps.videos)) {
+      inputProps.videos = inputProps.videos.map(v => {
+        if (typeof v === 'string') return { url: normalizeDriveUrl(v) };
+        if (v && v.url) return { ...v, url: normalizeDriveUrl(v.url) };
+        return v;
+      });
+    }
+
+    if (Array.isArray(inputProps.imagens)) {
+      inputProps.imagens = inputProps.imagens.map(i => {
+        if (typeof i === 'string') return { url: normalizeDriveUrl(i) };
+        if (i && i.url) return { ...i, url: normalizeDriveUrl(i.url) };
+        return i;
+      });
+    }
+    // ----------------------------------------
 
     if (inputProps.legendasSrt && inputProps.legendaUrl) {
       inputProps.legendaUrl = undefined;
