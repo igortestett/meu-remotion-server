@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import dns from "dns";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import crypto from "crypto";
 import {
   deploySite,
   getOrCreateBucket,
@@ -178,6 +180,62 @@ const normalizeDriveUrl = (url) => {
   return url;
 };
 
+
+// Helper: Calcula hash MD5 de uma string
+const md5 = (str) => crypto.createHash('md5').update(str).digest('hex');
+
+// Cache de assets no S3
+const cacheAssetOnS3 = async (url, bucketName, region) => {
+  if (!url || typeof url !== 'string' || !url.startsWith('http')) return url;
+  
+  // Se já for S3 ou Google Drive normalizado, talvez não precise cachear?
+  // Mas para garantir velocidade máxima, vamos cachear TUDO que não for do nosso bucket.
+  if (url.includes(bucketName)) return url;
+
+  try {
+    const s3 = new S3Client({ region });
+    const extension = path.extname(url.split('?')[0]) || '.bin';
+    const key = `assets-cache/${md5(url)}${extension}`;
+    const s3Url = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+
+    // Verifica se já existe (opcional, para economizar requests HEAD podemos pular e tentar upload direto se for barato)
+    // Mas para performance, ideal é verificar se já existe.
+    // Simplificação: Vamos baixar e subir sempre? Não, cache é pra evitar isso.
+    // Melhor estratégia: Tentar HEAD no S3.
+    try {
+      const headRes = await fetch(s3Url, { method: 'HEAD' });
+      if (headRes.ok) {
+        console.log(`💎 Asset em cache S3: ${key}`);
+        return s3Url;
+      }
+    } catch (e) {
+      // Ignora erro de rede no check, tenta baixar e subir
+    }
+
+    console.log(`📥 Baixando asset para cache: ${url}`);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Falha download asset: ${res.status}`);
+    
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const contentType = res.headers.get('content-type') || 'application/octet-stream';
+
+    console.log(`📤 Subindo para S3: ${key}`);
+    await s3.send(new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+      ACL: 'public-read' // Importante para o Lambda conseguir ler via URL simples
+    }));
+
+    return s3Url;
+  } catch (err) {
+    console.warn(`⚠️ Falha ao cachear asset ${url}, usando original. Erro: ${err.message}`);
+    return url;
+  }
+};
+
 // Rota de Renderização (assíncrona)
 app.post("/render", async (req, res) => {
   try {
@@ -245,6 +303,35 @@ app.post("/render", async (req, res) => {
 
     const region = process.env.REMOTION_AWS_REGION;
     const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME?.trim();
+    const { bucketName } = await getOrCreateBucket({ region }); // Garante bucket para cache
+
+    // --- PRÉ-CACHE DE ASSETS (CRUCIAL PARA CONCURRENCY) ---
+    console.log("🚀 Iniciando pré-cache de assets no S3...");
+    
+    // Cache de Áudios
+    if (inputProps.audioUrl) inputProps.audioUrl = await cacheAssetOnS3(inputProps.audioUrl, bucketName, region);
+    if (inputProps.musicaUrl) inputProps.musicaUrl = await cacheAssetOnS3(inputProps.musicaUrl, bucketName, region);
+    if (inputProps.narracaoUrl) inputProps.narracaoUrl = await cacheAssetOnS3(inputProps.narracaoUrl, bucketName, region);
+    
+    // Cache de Vídeos
+    if (Array.isArray(inputProps.videos)) {
+      inputProps.videos = await Promise.all(inputProps.videos.map(async v => {
+        if (typeof v === 'string') return { url: await cacheAssetOnS3(v, bucketName, region) };
+        if (v && v.url) return { ...v, url: await cacheAssetOnS3(v.url, bucketName, region) };
+        return v;
+      }));
+    }
+
+    // Cache de Imagens
+    if (Array.isArray(inputProps.imagens)) {
+      inputProps.imagens = await Promise.all(inputProps.imagens.map(async i => {
+        if (typeof i === 'string') return { url: await cacheAssetOnS3(i, bucketName, region) };
+        if (i && i.url) return { ...i, url: await cacheAssetOnS3(i.url, bucketName, region) };
+        return i;
+      }));
+    }
+    console.log("✅ Pré-cache concluído!");
+    // -----------------------------------------------------
 
     console.log(`🔧 Configuração Lambda:`);
     console.log(`   - Region: ${region}`);
