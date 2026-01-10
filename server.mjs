@@ -149,6 +149,7 @@ const RenderSchema = z.object({
   narracaoUrl: z.string().optional(),
   legendaUrl: z.string().optional(),
   legendasSrt: z.string().optional(),
+  concurrency: z.number().min(1).max(1000).optional(),
 }).passthrough(); // Permite outras props
 
 // Helper para converter Google Drive View Link -> Direct Download Link
@@ -268,7 +269,7 @@ app.post("/render", async (req, res) => {
         crf: 26, // Otimização de tamanho (padrão 23, maior = menor arquivo/menor qualidade)
         audioBitrate: "128k", // Otimização de áudio
         pixelFormat: "yuv420p", // Garante compatibilidade
-        concurrency: Number(process.env.REMOTION_CONCURRENCY || 50),
+        concurrency: inputProps.concurrency || Number(process.env.REMOTION_CONCURRENCY || 50),
         timeoutInSeconds: 900,
         retries: 1,
       });
