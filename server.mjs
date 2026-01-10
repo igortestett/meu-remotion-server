@@ -269,7 +269,7 @@ app.post("/render", async (req, res) => {
         crf: 26, // Otimização de tamanho (padrão 23, maior = menor arquivo/menor qualidade)
         audioBitrate: "128k", // Otimização de áudio
         pixelFormat: "yuv420p", // Garante compatibilidade
-        concurrency: inputProps.concurrency || Number(process.env.REMOTION_CONCURRENCY || 50),
+        concurrency: inputProps.concurrency || Number(process.env.REMOTION_CONCURRENCY || 100),
         timeoutInSeconds: 900,
         retries: 1,
       });
