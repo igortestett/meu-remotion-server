@@ -195,8 +195,8 @@ const cacheAssetOnS3 = async (url, bucketName, region) => {
   try {
     const s3 = new S3Client({ region });
     const extension = path.extname(url.split('?')[0]) || '.bin';
-    // Adiciona sufixo v3 para invalidar cache antigo e garantir integridade
-    const key = `assets-cache/${md5(url)}-v3${extension}`;
+    // Adiciona sufixo v4 para invalidar cache antigo e garantir Content-Type correto
+    const key = `assets-cache/${md5(url)}-v4${extension}`;
     const s3Url = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
 
     // Verifica se já existe (opcional, para economizar requests HEAD podemos pular e tentar upload direto se for barato)
@@ -227,10 +227,10 @@ const cacheAssetOnS3 = async (url, bucketName, region) => {
 
     const contentType = res.headers.get('content-type') || 'application/octet-stream';
 
-    // Força contentType para vídeo se a extensão for mp4, para evitar application/octet-stream
+    // Força contentType para vídeo se a extensão for mp4
     let finalContentType = contentType;
-    if (extension === '.mp4' && (contentType === 'application/octet-stream' || !contentType)) {
-      finalContentType = 'video/mp4';
+    if (extension === '.mp4') {
+      finalContentType = 'video/mp4'; // Força SEMPRE video/mp4, ignorando o que veio do servidor
     }
 
     console.log(`📤 Subindo para S3: ${key} (${finalContentType})`);
