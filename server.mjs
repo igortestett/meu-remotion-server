@@ -195,8 +195,8 @@ const cacheAssetOnS3 = async (url, bucketName, region) => {
   try {
     const s3 = new S3Client({ region });
     const extension = path.extname(url.split('?')[0]) || '.bin';
-    // Adiciona sufixo v2 para invalidar cache antigo que pode ter Content-Type errado
-    const key = `assets-cache/${md5(url)}-v2${extension}`;
+    // Adiciona sufixo v3 para invalidar cache antigo e garantir integridade
+    const key = `assets-cache/${md5(url)}-v3${extension}`;
     const s3Url = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
 
     // Verifica se já existe (opcional, para economizar requests HEAD podemos pular e tentar upload direto se for barato)
@@ -213,12 +213,18 @@ const cacheAssetOnS3 = async (url, bucketName, region) => {
       // Ignora erro de rede no check, tenta baixar e subir
     }
 
-    console.log(`📥 Baixando asset para cache: ${url}`);
+    console.log(`📥 Baixando asset: ${url}`);
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`Falha download asset: ${res.status}`);
+    if (!res.ok) throw new Error(`Falha ao baixar asset: ${res.statusText}`);
     
     const arrayBuffer = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    
+    const expectedSize = Number(res.headers.get('content-length'));
+    if (expectedSize && buffer.length !== expectedSize) {
+       console.warn(`⚠️ ALERTA: Tamanho do download difere do Content-Length! Esperado: ${expectedSize}, Recebido: ${buffer.length}`);
+    }
+
     const contentType = res.headers.get('content-type') || 'application/octet-stream';
 
     // Força contentType para vídeo se a extensão for mp4, para evitar application/octet-stream
