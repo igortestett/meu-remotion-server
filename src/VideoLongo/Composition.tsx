@@ -7,7 +7,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
   Sequence,
-  Video,
+  OffthreadVideo, // Trocado Video por OffthreadVideo
   delayRender,
   continueRender,
   cancelRender,
@@ -96,8 +96,9 @@ export const VideoLongo = (props: VideoLongoProps) => {
           durationInFrames={duracaoFrames} 
           key={`video-${index}`}
         >
-          <Video 
+          <OffthreadVideo 
             src={video.url} 
+            onError={(e) => console.error(`Erro ao reproduzir vídeo ${video.url}:`, e)}
             // Garante que o vídeo não tenha áudio se não for desejado, 
             // mas o usuário disse "vídeos não possuem áudio", então Video padrão já serve.
             // Se quisesse forçar mudo: muted={true}

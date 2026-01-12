@@ -256,24 +256,32 @@ app.post("/render", async (req, res) => {
     const body = RenderSchema.parse(rawBody);
     const inputProps = body;
 
-    // --- NORMALIZAÇÃO DE URLS (DRIVE FIX) ---
-    inputProps.audioUrl = normalizeDriveUrl(inputProps.audioUrl);
-    inputProps.musicaUrl = normalizeDriveUrl(inputProps.musicaUrl);
-    inputProps.narracaoUrl = normalizeDriveUrl(inputProps.narracaoUrl);
-    inputProps.legendaUrl = normalizeDriveUrl(inputProps.legendaUrl);
+    // --- NORMALIZAÇÃO DE URLS (DRIVE FIX E LIMPEZA) ---
+    // Remove espaços em branco das URLs e normaliza links do Drive
+    const cleanUrl = (u) => {
+        if (!u || typeof u !== 'string') return u;
+        // Remove espaços, quebras de linha e crases acidentais
+        const trimmed = u.replace(/[`\s]/g, '').trim(); 
+        return normalizeDriveUrl(trimmed);
+    };
+
+    inputProps.audioUrl = cleanUrl(inputProps.audioUrl);
+    inputProps.musicaUrl = cleanUrl(inputProps.musicaUrl);
+    inputProps.narracaoUrl = cleanUrl(inputProps.narracaoUrl);
+    inputProps.legendaUrl = cleanUrl(inputProps.legendaUrl);
 
     if (Array.isArray(inputProps.videos)) {
       inputProps.videos = inputProps.videos.map(v => {
-        if (typeof v === 'string') return { url: normalizeDriveUrl(v) };
-        if (v && v.url) return { ...v, url: normalizeDriveUrl(v.url) };
+        if (typeof v === 'string') return { url: cleanUrl(v) };
+        if (v && v.url) return { ...v, url: cleanUrl(v.url) };
         return v;
       });
     }
 
     if (Array.isArray(inputProps.imagens)) {
       inputProps.imagens = inputProps.imagens.map(i => {
-        if (typeof i === 'string') return { url: normalizeDriveUrl(i) };
-        if (i && i.url) return { ...i, url: normalizeDriveUrl(i.url) };
+        if (typeof i === 'string') return { url: cleanUrl(i) };
+        if (i && i.url) return { ...i, url: cleanUrl(i.url) };
         return i;
       });
     }
