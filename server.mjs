@@ -220,12 +220,18 @@ const cacheAssetOnS3 = async (url, bucketName, region) => {
     const buffer = Buffer.from(arrayBuffer);
     const contentType = res.headers.get('content-type') || 'application/octet-stream';
 
-    console.log(`📤 Subindo para S3: ${key}`);
+    // Força contentType para vídeo se a extensão for mp4, para evitar application/octet-stream
+    let finalContentType = contentType;
+    if (extension === '.mp4' && (contentType === 'application/octet-stream' || !contentType)) {
+      finalContentType = 'video/mp4';
+    }
+
+    console.log(`📤 Subindo para S3: ${key} (${finalContentType})`);
     await s3.send(new PutObjectCommand({
       Bucket: bucketName,
       Key: key,
       Body: buffer,
-      ContentType: contentType,
+      ContentType: finalContentType,
       ACL: 'public-read' // Importante para o Lambda conseguir ler via URL simples
     }));
 
