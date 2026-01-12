@@ -263,32 +263,8 @@ app.post("/render", async (req, res) => {
     const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME?.trim();
     const { bucketName } = await getOrCreateBucket({ region }); // Garante bucket para cache
 
-    // --- PRÉ-CACHE DE ASSETS (CRUCIAL PARA CONCURRENCY) ---
-    console.log("🚀 Iniciando pré-cache de assets no S3...");
-    
-    // Cache de Áudios
-    if (inputProps.audioUrl) inputProps.audioUrl = await cacheAssetOnS3(inputProps.audioUrl, bucketName, region);
-    if (inputProps.musicaUrl) inputProps.musicaUrl = await cacheAssetOnS3(inputProps.musicaUrl, bucketName, region);
-    if (inputProps.narracaoUrl) inputProps.narracaoUrl = await cacheAssetOnS3(inputProps.narracaoUrl, bucketName, region);
-    
-    // Cache de Vídeos
-    if (Array.isArray(inputProps.videos)) {
-      inputProps.videos = await Promise.all(inputProps.videos.map(async v => {
-        if (typeof v === 'string') return { url: await cacheAssetOnS3(v, bucketName, region) };
-        if (v && v.url) return { ...v, url: await cacheAssetOnS3(v.url, bucketName, region) };
-        return v;
-      }));
-    }
-
-    // Cache de Imagens
-    if (Array.isArray(inputProps.imagens)) {
-      inputProps.imagens = await Promise.all(inputProps.imagens.map(async i => {
-        if (typeof i === 'string') return { url: await cacheAssetOnS3(i, bucketName, region) };
-        if (i && i.url) return { ...i, url: await cacheAssetOnS3(i.url, bucketName, region) };
-        return i;
-      }));
-    }
-    console.log("✅ Pré-cache concluído!");
+    // --- PRÉ-CACHE DE ASSETS (REMOVIDO) ---
+    console.log("⏩ Pulando cache de assets (modo direto)...");
     // -----------------------------------------------------
 
     console.log(`🔧 Configuração Lambda:`);
