@@ -31,18 +31,9 @@ export const calculateVideoLongoMetadata: CalculateMetadataFunction<VideoLongoPr
   const fps = 30;
   let duracaoTotalSegundos = 0;
 
-  const duracoesVideos = await Promise.all(
-    props.videos.map(async (video) => {
-      if (video.duracaoEmSegundos) return video.duracaoEmSegundos;
-      try {
-        const meta = await getVideoMetadata(video.url);
-        return meta.durationInSeconds;
-      } catch (e) {
-        console.error("Erro metadados video", e);
-        return 5;
-      }
-    })
-  );
+  // Como o usuário garante que envia duracaoEmSegundos, usamos direto.
+  // Fallback para 5s apenas se não vier nada (sem network request).
+  const duracoesVideos = props.videos.map(v => v.duracaoEmSegundos || 5);
   duracaoTotalSegundos += duracoesVideos.reduce((sum, dur) => sum + dur, 0);
 
   const duracaoImagens = props.imagens.reduce(
@@ -98,6 +89,7 @@ export const VideoLongo = (props: VideoLongoProps) => {
         >
           <OffthreadVideo 
             src={video.url} 
+            delayRenderTimeoutInMilliseconds={120000} // 2 minutos para evitar timeout em downloads lentos
             onError={(e) => console.error(`Erro ao reproduzir vídeo ${video.url}:`, e)}
             // Garante que o vídeo não tenha áudio se não for desejado, 
             // mas o usuário disse "vídeos não possuem áudio", então Video padrão já serve.
