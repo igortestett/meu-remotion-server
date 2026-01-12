@@ -181,73 +181,10 @@ const normalizeDriveUrl = (url) => {
 };
 
 
-// Helper: Calcula hash MD5 de uma string
-const md5 = (str) => crypto.createHash('md5').update(str).digest('hex');
+// Helper: Calcula hash MD5 de uma string (removido)
 
-// Cache de assets no S3
-const cacheAssetOnS3 = async (url, bucketName, region) => {
-  if (!url || typeof url !== 'string' || !url.startsWith('http')) return url;
-  
-  // Se já for S3 ou Google Drive normalizado, talvez não precise cachear?
-  // Mas para garantir velocidade máxima, vamos cachear TUDO que não for do nosso bucket.
-  if (url.includes(bucketName)) return url;
-
-  try {
-    const s3 = new S3Client({ region });
-    const extension = path.extname(url.split('?')[0]) || '.bin';
-    // Adiciona sufixo v4 para invalidar cache antigo e garantir Content-Type correto
-    const key = `assets-cache/${md5(url)}-v4${extension}`;
-    const s3Url = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
-
-    // Verifica se já existe (opcional, para economizar requests HEAD podemos pular e tentar upload direto se for barato)
-    // Mas para performance, ideal é verificar se já existe.
-    // Simplificação: Vamos baixar e subir sempre? Não, cache é pra evitar isso.
-    // Melhor estratégia: Tentar HEAD no S3.
-    try {
-      const headRes = await fetch(s3Url, { method: 'HEAD' });
-      if (headRes.ok) {
-        console.log(`💎 Asset em cache S3: ${key}`);
-        return s3Url;
-      }
-    } catch (e) {
-      // Ignora erro de rede no check, tenta baixar e subir
-    }
-
-    console.log(`📥 Baixando asset: ${url}`);
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Falha ao baixar asset: ${res.statusText}`);
-    
-    const arrayBuffer = await res.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    
-    const expectedSize = Number(res.headers.get('content-length'));
-    if (expectedSize && buffer.length !== expectedSize) {
-       console.warn(`⚠️ ALERTA: Tamanho do download difere do Content-Length! Esperado: ${expectedSize}, Recebido: ${buffer.length}`);
-    }
-
-    const contentType = res.headers.get('content-type') || 'application/octet-stream';
-
-    // Força contentType para vídeo se a extensão for mp4
-    let finalContentType = contentType;
-    if (extension === '.mp4') {
-      finalContentType = 'video/mp4'; // Força SEMPRE video/mp4, ignorando o que veio do servidor
-    }
-
-    console.log(`📤 Subindo para S3: ${key} (${finalContentType})`);
-    await s3.send(new PutObjectCommand({
-      Bucket: bucketName,
-      Key: key,
-      Body: buffer,
-      ContentType: finalContentType,
-      ACL: 'public-read' // Importante para o Lambda conseguir ler via URL simples
-    }));
-
-    return s3Url;
-  } catch (err) {
-    console.warn(`⚠️ Falha ao cachear asset ${url}, usando original. Erro: ${err.message}`);
-    return url;
-  }
-};
+// Cache de assets no S3 (REMOVIDO A PEDIDO DO USUÁRIO)
+// const cacheAssetOnS3 = async ...
 
 // Rota de Renderização (assíncrona)
 app.post("/render", async (req, res) => {
